@@ -1,0 +1,22 @@
+{
+  "name": "trello-clone-assignment",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "node scripts/ensure-server-env.mjs && concurrently \"npm run dev --workspace server\" \"npm run dev --workspace client\"",
+    "build": "npm run build --workspace server && npm run build --workspace client",
+    "db:start": "node scripts/start-postgres.mjs",
+    "db:stop": "node scripts/stop-postgres.mjs",
+    "db:generate": "node scripts/ensure-server-env.mjs && npm run prisma:generate --workspace server",
+    "db:push": "node scripts/ensure-server-env.mjs && npm run prisma:push --workspace server",
+    "db:seed": "node scripts/ensure-server-env.mjs && npm run prisma:seed --workspace server",
+    "setup": "npm run db:start && npm run db:generate && npm run db:push && npm run db:seed"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
