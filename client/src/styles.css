@@ -762,10 +762,8 @@ svg {
   justify-content: center;
   writing-mode: vertical-rl;
   text-orientation: mixed;
-<<<<<<< HEAD
   letter-spacing: 0.04em;
   line-height: 1;
-=======
   font-weight: 700;
   white-space: nowrap;
   transition: background 140ms ease, transform 140ms ease;
@@ -774,11 +772,6 @@ svg {
 
 .starter-guide-pill span {
   display: block;
-}
-
-.starter-guide-pill:hover {
-  background: rgba(78, 50, 118, 0.92);
-  transform: translateX(2px);
 }
 
 .starter-guide-pill__icon,
@@ -796,9 +789,7 @@ svg {
   background: rgba(255, 255, 255, 0.12);
   font-size: 0.72rem;
   opacity: 0.9;
->>>>>>> 20bb5fd (fix(ui): resolve Starter Guide pill overflow and improve Delete button visibility)
 }
-
 
 .board-canvas {
   height: 100%;
