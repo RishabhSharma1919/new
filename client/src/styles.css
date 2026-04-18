@@ -1281,6 +1281,8 @@ svg {
 .floating-dock__button {
   min-height: 2.3rem;
   padding: 0.5rem 0.85rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .floating-dock__button.is-active {
@@ -2753,6 +2755,13 @@ button:disabled {
 
   .floating-dock {
     width: calc(100% - 1.7rem);
-    justify-content: center;
+    justify-content: flex-start;
+    overflow-x: auto;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .floating-dock::-webkit-scrollbar {
+    display: none;
   }
 }
