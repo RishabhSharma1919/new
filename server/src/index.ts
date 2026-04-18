@@ -756,6 +756,77 @@ app.delete("/api/checklist-items/:itemId", asyncRoute(async (request, response) 
   response.json({ board: await getBoardDetails(boardId) });
 }));
 
+app.post("/api/boards/:boardId/labels", asyncRoute(async (request, response) => {
+  const boardId = request.params.boardId;
+  const name = asString(request.body?.name) ?? "";
+  const color = asString(request.body?.color);
+
+  if (!color) {
+    response.status(400).json({ error: "Color is required." });
+    return;
+  }
+
+  const board = await prisma.board.findUnique({ where: { id: boardId } });
+  if (!board) {
+    response.status(404).json({ error: "Board not found." });
+    return;
+  }
+
+  await prisma.label.create({
+    data: {
+      boardId,
+      name,
+      color,
+    },
+  });
+
+  response.status(201).json({ board: await getBoardDetails(boardId) });
+}));
+
+app.patch("/api/labels/:labelId", asyncRoute(async (request, response) => {
+  const labelId = request.params.labelId;
+  const label = await prisma.label.findUnique({ where: { id: labelId } });
+  if (!label) {
+    response.status(404).json({ error: "Label not found." });
+    return;
+  }
+
+  const data: Record<string, string> = {};
+  if (typeof request.body?.name === "string") {
+    data.name = request.body.name;
+  }
+  if (typeof request.body?.color === "string" && request.body.color.trim()) {
+    data.color = request.body.color.trim();
+  }
+
+  if (Object.keys(data).length === 0) {
+    response.status(400).json({ error: "At least one field is required to update." });
+    return;
+  }
+
+  await prisma.label.update({
+    where: { id: labelId },
+    data,
+  });
+
+  response.json({ board: await getBoardDetails(label.boardId) });
+}));
+
+app.delete("/api/labels/:labelId", asyncRoute(async (request, response) => {
+  const labelId = request.params.labelId;
+  const label = await prisma.label.findUnique({ where: { id: labelId } });
+  if (!label) {
+    response.status(404).json({ error: "Label not found." });
+    return;
+  }
+
+  await prisma.label.delete({
+    where: { id: labelId },
+  });
+
+  response.json({ board: await getBoardDetails(label.boardId) });
+}));
+
 app.use("/api", (_request, response) => {
   response.status(404).json({ error: "Route not found." });
 });

@@ -33,7 +33,7 @@ export function CardTile({ card, onOpen, isDragging }: CardTileProps) {
       <div className="card-tile__top">
         <div className="card-tile__labels">
           {card.labels.map((label) => (
-            <span key={label.id} className="card-label" style={{ backgroundColor: label.color }}>
+            <span key={label.id} className="card-label" style={{ backgroundColor: label.color }} title={`Color: ${label.color}, title: ${label.name || "none"}`}>
               {label.name}
             </span>
           ))}

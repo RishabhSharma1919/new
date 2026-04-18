@@ -779,6 +779,9 @@ export default function App() {
           onUpdateChecklistItem={(itemId, payload) =>
             syncBoardMutation(api.updateChecklistItem(itemId, payload), currentBoard.id)
           }
+          onCreateLabel={(payload) => syncBoardMutation(api.createLabel(currentBoard.id, payload), currentBoard.id)}
+          onUpdateLabel={(labelId, payload) => syncBoardMutation(api.updateLabel(labelId, payload), currentBoard.id)}
+          onDeleteLabel={(labelId) => syncBoardMutation(api.deleteLabel(labelId), currentBoard.id)}
         />
       ) : null}
     </div>

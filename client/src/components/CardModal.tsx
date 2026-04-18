@@ -41,6 +41,9 @@ type CardModalProps = {
   ) => Promise<void>;
   onUpdateChecklist: (checklistId: string, title: string) => Promise<void>;
   onUpdateChecklistItem: (itemId: string, payload: { title?: string; isComplete?: boolean }) => Promise<void>;
+  onCreateLabel?: (payload: { name: string; color: string }) => Promise<void>;
+  onUpdateLabel?: (labelId: string, payload: { name?: string; color?: string }) => Promise<void>;
+  onDeleteLabel?: (labelId: string) => Promise<void>;
 };
 
 export function CardModal({
@@ -60,6 +63,9 @@ export function CardModal({
   onUpdateCard,
   onUpdateChecklist,
   onUpdateChecklistItem,
+  onCreateLabel,
+  onUpdateLabel,
+  onDeleteLabel,
 }: CardModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -79,6 +85,12 @@ export function CardModal({
   const [isRemovingCover, setIsRemovingCover] = useState(false);
   const [activeDockView, setActiveDockView] = useState<CardDockView>("comments");
   const [showActivityDetails, setShowActivityDetails] = useState(true);
+  const [labelSearch, setLabelSearch] = useState("");
+  const [isLabelPopoverOpen, setIsLabelPopoverOpen] = useState(false);
+  const [editingLabelId, setEditingLabelId] = useState<string | "new" | null>(null);
+  const [editLabelName, setEditLabelName] = useState("");
+  const [editLabelColor, setEditLabelColor] = useState("");
+  const [isSavingLabel, setIsSavingLabel] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
@@ -110,6 +122,9 @@ export function CardModal({
     setIsRemovingCover(false);
     setActiveDockView("comments");
     setShowActivityDetails(true);
+    setLabelSearch("");
+    setIsLabelPopoverOpen(false);
+    setEditingLabelId(null);
   }, [card?.id]);
 
   const checklistStats = useMemo(() => (card ? getChecklistStats(card) : { completed: 0, total: 0 }), [card]);
@@ -235,6 +250,39 @@ export function CardModal({
     }
   }
 
+  async function handleSaveLabel() {
+    if (!editLabelColor) return;
+    setIsSavingLabel(true);
+    try {
+      if (editingLabelId === "new") {
+        await onCreateLabel?.({ name: editLabelName.trim(), color: editLabelColor });
+      } else if (editingLabelId) {
+        await onUpdateLabel?.(editingLabelId, { name: editLabelName.trim(), color: editLabelColor });
+      }
+      setEditingLabelId(null);
+    } finally {
+      setIsSavingLabel(false);
+    }
+  }
+
+  async function handleDeleteLabelAction() {
+    if (!editingLabelId || editingLabelId === "new") return;
+    if (!window.confirm("Are you sure you want to delete this label? This will remove it from all cards.")) return;
+    setIsSavingLabel(true);
+    try {
+      await onDeleteLabel?.(editingLabelId);
+      setEditingLabelId(null);
+      setSelectedLabelIds((current) => current.filter((id) => id !== editingLabelId));
+    } finally {
+      setIsSavingLabel(false);
+    }
+  }
+
+  const LABEL_COLORS = [
+    "#4bce97", "#e2b203", "#f87462", "#9f8fef",
+    "#579dff", "#60c6d2", "#e774bb", "#8590a2"
+  ];
+
   function resetFileInputs() {
     if (attachmentInputRef.current) {
       attachmentInputRef.current.value = "";
@@ -295,78 +343,40 @@ export function CardModal({
         />
 
         <div className="modal-shell__header">
-          <div className="modal-shell__title">
-            <div className="modal-shell__title-icon">
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <rect
-                  x="4.5"
-                  y="5.5"
-                  width="15"
-                  height="13"
-                  rx="2.5"
+          <div className="modal-shell__header-left">
+            <button className="list-dropdown-button" type="button">
+              {currentListTitle}
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
+                <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+          <div className="modal-shell__header-right">
+            <button className="icon-button" type="button" aria-label="Maximize">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
+                <path d="M4 4h16v16H4V4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M4 8h16M8 20V8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <button className="icon-button" type="button" aria-label="More">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
+                <circle cx="5" cy="12" r="2" fill="currentColor" />
+                <circle cx="12" cy="12" r="2" fill="currentColor" />
+                <circle cx="19" cy="12" r="2" fill="currentColor" />
+              </svg>
+            </button>
+            <button className="icon-button modal-close-button" onClick={onClose} type="button" aria-label="Close card">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
+                <path
+                  d="m7 7 10 10M17 7 7 17"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
                 />
-                <path d="M10 5.5v13" fill="none" stroke="currentColor" strokeWidth="1.7" />
               </svg>
-            </div>
-            <div>
-              <p className="modal-shell__eyebrow">Card</p>
-              <h3>{card.title}</h3>
-              <p className="modal-shell__subtitle">
-                in list <strong>{currentListTitle}</strong>
-              </p>
-            </div>
-          </div>
-          <button className="icon-button modal-close-button" onClick={onClose} type="button" aria-label="Close card">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path
-                d="m7 7 10 10M17 7 7 17"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.8"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <div className="modal-badge-strip">
-          <div className="modal-badge-group">
-            <span className="modal-badge-label">Members</span>
-            <div className="modal-summary-members">
-              {card.members.length > 0 ? (
-                card.members.map((member) => (
-                  <span key={member.id} className="card-member" style={{ backgroundColor: member.color }}>
-                    {member.avatar}
-                  </span>
-                ))
-              ) : (
-                <span className="empty-inline">None</span>
-              )}
-            </div>
-          </div>
-
-          <div className="modal-badge-group">
-            <span className="modal-badge-label">Labels</span>
-            <div className="modal-summary-labels">
-              {card.labels.length > 0 ? (
-                card.labels.map((label) => (
-                  <span key={label.id} className="card-label" style={{ backgroundColor: label.color }}>
-                    {label.name}
-                  </span>
-                ))
-              ) : (
-                <span className="empty-inline">None</span>
-              )}
-            </div>
-          </div>
-
-          <div className="modal-badge-group">
-            <span className="modal-badge-label">Due date</span>
-            <span className={`due-badge ${card.dueDate ? "" : "is-empty"}`}>{formatDueDate(card.dueDate)}</span>
+            </button>
           </div>
         </div>
 
@@ -378,9 +388,61 @@ export function CardModal({
               </div>
             ) : null}
 
-            <label className="field field--modal-title">
-              <input value={title} onChange={(event) => setTitle(event.target.value)} />
-            </label>
+            <div className="card-title-group">
+              <div className="card-title-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                  <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
+                </svg>
+              </div>
+              <label className="field field--main-title">
+                <input 
+                  value={title} 
+                  onChange={(event) => setTitle(event.target.value)} 
+                  onBlur={() => {
+                    const nextTitle = title.trim();
+                    if (nextTitle && nextTitle !== card.title) {
+                      void onUpdateCard(card.id, {
+                        ...card,
+                        labelIds: card.labels.map(l => l.id),
+                        memberIds: card.members.map(m => m.id),
+                        title: nextTitle
+                      });
+                    }
+                  }}
+                />
+              </label>
+            </div>
+
+            <div className="quick-actions-row">
+              <button className="pill-button" onClick={() => attachmentInputRef.current?.click()} type="button">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Add
+              </button>
+              <button className="pill-button" onClick={() => focusElement(dueDateInputRef.current)} type="button">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                Dates
+              </button>
+              <button
+                className="pill-button"
+                onClick={() => focusElement(newChecklistInputRef.current ?? checklistSectionRef.current)}
+                type="button"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                Checklist
+              </button>
+              <button
+                className="pill-button"
+                onClick={() => focusElement(membersSectionRef.current, { focus: false })}
+                type="button"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+                Members
+              </button>
+              <button className="pill-button" onClick={() => focusElement(attachmentInputRef.current)} type="button">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                Attachment
+              </button>
+            </div>
 
             <div className="modal-quick-actions">
               <button className="modal-quick-action" onClick={() => attachmentInputRef.current?.click()} type="button">
@@ -412,14 +474,163 @@ export function CardModal({
               </button>
             </div>
 
-            <label className="field">
-              <span>Description</span>
+            <div className="card-inline-labels" ref={labelsSectionRef}>
+              <h5>Labels</h5>
+              <div className="card-inline-labels__list">
+                {card.labels.map((label) => (
+                  <span key={label.id} className="card-label" style={{ backgroundColor: label.color }} title={`Color: ${label.color}, title: ${label.name || "none"}`}>
+                    {label.name}
+                  </span>
+                ))}
+                <div className="label-popover-wrapper">
+                  <button 
+                    className="label-add-button" 
+                    type="button" 
+                    onClick={() => setIsLabelPopoverOpen((open) => !open)}
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                  {isLabelPopoverOpen ? (
+                    <div className="label-popover">
+                      {editingLabelId ? (
+                        <div className="label-editor">
+                          <div className="label-editor__header">
+                            <button className="icon-button" type="button" onClick={() => setEditingLabelId(null)} aria-label="Back">
+                              <svg viewBox="0 0 24 24" width="16" height="16"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </button>
+                            <h5>{editingLabelId === "new" ? "Create label" : "Edit label"}</h5>
+                          </div>
+                          <div className="label-editor__preview" style={{ backgroundColor: editLabelColor || "#091e420f" }}>
+                            {editLabelName || "Label title"}
+                          </div>
+                          <label className="field">
+                            <span>Title</span>
+                            <input autoFocus value={editLabelName} onChange={(e) => setEditLabelName(e.target.value)} />
+                          </label>
+                          <div className="field">
+                            <span>Select a color</span>
+                            <div className="color-grid">
+                              {LABEL_COLORS.map(color => (
+                                <button
+                                  key={color}
+                                  type="button"
+                                  className={`color-swatch ${editLabelColor === color ? "is-selected" : ""}`}
+                                  style={{ backgroundColor: color }}
+                                  onClick={() => setEditLabelColor(color)}
+                                />
+                              ))}
+                              <button 
+                                type="button" 
+                                className={`color-swatch color-swatch--none ${!editLabelColor ? "is-selected" : ""}`} 
+                                onClick={() => setEditLabelColor("")}
+                              >
+                                <span className="visually-hidden">No color</span>
+                              </button>
+                            </div>
+                          </div>
+                          <div className="label-editor__actions">
+                            <button className="primary-button" disabled={!editLabelColor || isSavingLabel} onClick={handleSaveLabel} type="button">
+                              {isSavingLabel ? "Saving..." : "Save"}
+                            </button>
+                            {editingLabelId !== "new" && (
+                              <button className="danger-button" disabled={isSavingLabel} onClick={handleDeleteLabelAction} type="button">
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="label-selector">
+                          <div className="label-editor__header">
+                            <h5>Labels</h5>
+                            <button className="icon-button" type="button" onClick={() => setIsLabelPopoverOpen(false)}>
+                              <svg viewBox="0 0 24 24" width="16" height="16"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </button>
+                          </div>
+                          <input
+                            className="inline-input search-input"
+                            placeholder="Search labels..."
+                            value={labelSearch}
+                            onChange={(e) => setLabelSearch(e.target.value)}
+                          />
+                          <div className="label-selector__list">
+                            {board.labels
+                              .filter((l) => l.name.toLowerCase().includes(labelSearch.toLowerCase()))
+                              .map((label) => (
+                                <div key={label.id} className="label-selector__item">
+                                  <label className="label-checkbox" style={{ backgroundColor: label.color }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedLabelIds.includes(label.id)}
+                                      onChange={() => {
+                                        const nextIds = selectedLabelIds.includes(label.id)
+                                          ? selectedLabelIds.filter((id) => id !== label.id)
+                                          : [...selectedLabelIds, label.id];
+                                        setSelectedLabelIds(nextIds);
+                                        void onUpdateCard(activeCard.id, {
+                                          ...card,
+                                          title: title.trim() || activeCard.title,
+                                          labelIds: nextIds,
+                                          memberIds: selectedMemberIds,
+                                        });
+                                      }}
+                                    />
+                                    <span>{label.name}</span>
+                                  </label>
+                                  <button
+                                    type="button"
+                                    className="icon-button"
+                                    aria-label={`Edit label ${label.name}`}
+                                    onClick={() => {
+                                      setEditingLabelId(label.id);
+                                      setEditLabelName(label.name);
+                                      setEditLabelColor(label.color);
+                                    }}
+                                  >
+                                    <svg viewBox="0 0 24 24" width="16" height="16"><path d="M16 4l4 4-10 10H6v-4L16 4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  </button>
+                                </div>
+                            ))}
+                          </div>
+                          <button
+                            className="ghost-button full-width-button"
+                            type="button"
+                            onClick={() => {
+                              setEditingLabelId("new");
+                              setEditLabelName("");
+                              setEditLabelColor(LABEL_COLORS[0]);
+                            }}
+                          >
+                            Create a new label
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <label className="field inline-description">
+              <div className="inline-description-header">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <line x1="3" y1="12" x2="21" y2="12"></line>
+                  <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+                <h5>Description</h5>
+              </div>
               <textarea
                 ref={descriptionRef}
                 placeholder="Add a more detailed description..."
                 rows={5}
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
+                onBlur={() => {
+                  if (description !== card.description) {
+                    void handleSave();
+                  }
+                }}
               />
             </label>
 
@@ -632,88 +843,7 @@ export function CardModal({
                 </button>
               </div>
             </div>
-          </section>
-
-          <aside className="modal-column modal-column--side">
-            <div className="modal-card modal-card--activity" ref={activitySectionRef}>
-              <div className="modal-card__header">
-                <h4>Comments and activity</h4>
-                <button className="ghost-button" onClick={() => setShowActivityDetails((current) => !current)} type="button">
-                  {showActivityDetails ? "Hide details" : "Show details"}
-                </button>
-              </div>
-
-              <label className="field field--comment-box">
-                <textarea
-                  ref={commentComposerRef}
-                  placeholder="Write a comment..."
-                  rows={2}
-                  value={newComment}
-                  onChange={(event) => setNewComment(event.target.value)}
-                />
-              </label>
-
-              <div className="comment-composer">
-                <button className="primary-button" disabled={isSubmittingComment} onClick={() => void handleAddComment()} type="button">
-                  {isSubmittingComment ? "Posting..." : "Post comment"}
-                </button>
-                {commentError ? <p className="inline-error">{commentError}</p> : null}
-              </div>
-
-              <div className="comment-list">
-                {card.comments.length > 0 ? (
-                  card.comments.map((comment) => (
-                    <div className="comment-item" key={comment.id}>
-                      <div className="comment-item__header">
-                        <strong>{comment.actorName ?? "Someone"}</strong>
-                        <small>{new Date(comment.createdAt).toLocaleString()}</small>
-                      </div>
-                      <p>{comment.message}</p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="empty-inline">No comments yet.</p>
-                )}
-              </div>
-
-              {showActivityDetails ? (
-                <div className="activity-list">
-                  {card.activity.length > 0 ? (
-                    card.activity.map((activity) => (
-                      <div className="activity-item" key={activity.id}>
-                        <strong>{activity.actorName ?? "Someone"}</strong>
-                        <p>{activity.message}</p>
-                        <small>{new Date(activity.createdAt).toLocaleString()}</small>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="empty-inline">No activity yet.</p>
-                  )}
-                </div>
-              ) : null}
-            </div>
-
-            <div className="modal-card" ref={labelsSectionRef}>
-              <div className="modal-card__header">
-                <h4>Labels</h4>
-                <span>{selectedLabelIds.length}</span>
-              </div>
-              <div className="selector-stack">
-                {board.labels.map((label) => (
-                  <button
-                    key={label.id}
-                    className={`selector-button ${selectedLabelIds.includes(label.id) ? "is-selected" : ""}`}
-                    onClick={() => toggleSelection(label.id, selectedLabelIds, setSelectedLabelIds)}
-                    style={{ borderColor: label.color }}
-                    type="button"
-                  >
-                    <span className="selector-button__swatch" style={{ backgroundColor: label.color }} />
-                    {label.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
+          
             <div className="modal-card" ref={membersSectionRef}>
               <div className="modal-card__header">
                 <h4>Members</h4>
@@ -724,7 +854,19 @@ export function CardModal({
                   <button
                     key={member.id}
                     className={`selector-button ${selectedMemberIds.includes(member.id) ? "is-selected" : ""}`}
-                    onClick={() => toggleSelection(member.id, selectedMemberIds, setSelectedMemberIds)}
+                    onClick={() => {
+                      const nextIds = selectedMemberIds.includes(member.id)
+                        ? selectedMemberIds.filter((id) => id !== member.id)
+                        : [...selectedMemberIds, member.id];
+                      setSelectedMemberIds(nextIds);
+                      void onUpdateCard(activeCard.id, {
+                        title: title.trim() || activeCard.title,
+                        description,
+                        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+                        labelIds: selectedLabelIds,
+                        memberIds: nextIds,
+                      });
+                    }}
                     type="button"
                   >
                     <span className="avatar-chip" style={{ backgroundColor: member.color }}>
@@ -808,7 +950,69 @@ export function CardModal({
                 Delete permanently
               </button>
             </div>
-          </aside>
+          
+          </section>
+
+          <aside className="modal-column modal-column--side">
+            <div className="modal-card modal-card--activity" ref={activitySectionRef}>
+              <div className="modal-card__header">
+                <h4>Comments and activity</h4>
+                <button className="ghost-button" onClick={() => setShowActivityDetails((current) => !current)} type="button">
+                  {showActivityDetails ? "Hide details" : "Show details"}
+                </button>
+              </div>
+
+              <label className="field field--comment-box">
+                <textarea
+                  ref={commentComposerRef}
+                  placeholder="Write a comment..."
+                  rows={2}
+                  value={newComment}
+                  onChange={(event) => setNewComment(event.target.value)}
+                />
+              </label>
+
+              <div className="comment-composer">
+                <button className="primary-button" disabled={isSubmittingComment} onClick={() => void handleAddComment()} type="button">
+                  {isSubmittingComment ? "Posting..." : "Post comment"}
+                </button>
+                {commentError ? <p className="inline-error">{commentError}</p> : null}
+              </div>
+
+              <div className="comment-list">
+                {card.comments.length > 0 ? (
+                  card.comments.map((comment) => (
+                    <div className="comment-item" key={comment.id}>
+                      <div className="comment-item__header">
+                        <strong>{comment.actorName ?? "Someone"}</strong>
+                        <small>{new Date(comment.createdAt).toLocaleString()}</small>
+                      </div>
+                      <p>{comment.message}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="empty-inline">No comments yet.</p>
+                )}
+              </div>
+
+              {showActivityDetails ? (
+                <div className="activity-list">
+                  {card.activity.length > 0 ? (
+                    card.activity.map((activity) => (
+                      <div className="activity-item" key={activity.id}>
+                        <strong>{activity.actorName ?? "Someone"}</strong>
+                        <p>{activity.message}</p>
+                        <small>{new Date(activity.createdAt).toLocaleString()}</small>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="empty-inline">No activity yet.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+                      </aside>
         </div>
 
         <div className="modal-footer-dock">

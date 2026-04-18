@@ -192,6 +192,23 @@ export const api = {
       method: "DELETE",
     });
   },
+  createLabel(boardId: string, payload: { name: string; color: string }) {
+    return request<BoardResponse>(`/boards/${boardId}/labels`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateLabel(labelId: string, payload: { name?: string; color?: string }) {
+    return request<BoardResponse>(`/labels/${labelId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteLabel(labelId: string) {
+    return request<BoardResponse>(`/labels/${labelId}`, {
+      method: "DELETE",
+    });
+  },
   deleteBoard(boardId: string) {
     return request<BoardsPayload>(`/boards/${boardId}`, {
       method: "DELETE",

@@ -2350,6 +2350,299 @@ button:disabled {
   }
 }
 
+/* =========================================================================
+   Label Editor & Selector
+   ========================================================================= */
+
+.label-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.search-input {
+  width: 100%;
+}
+
+.label-selector__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 0.5rem;
+}
+
+.label-selector__item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.label-checkbox {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.label-checkbox:hover {
+  opacity: 0.85;
+}
+
+.label-checkbox input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.label-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.label-editor__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.label-editor__header h5 {
+  margin: 0;
+  flex: 1;
+  text-align: center;
+  padding-right: 24px;
+}
+
+.label-editor__preview {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 0.5rem;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.4rem;
+  padding-top: 0.25rem;
+}
+
+.color-swatch {
+  height: 2rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.2s ease;
+  position: relative;
+}
+
+.color-swatch:hover {
+  opacity: 0.85;
+  transform: scale(1.05);
+}
+
+.color-swatch.is-selected {
+  outline: 2px solid #0052cc;
+  outline-offset: 2px;
+}
+
+.color-swatch--none {
+  background: rgba(9, 30, 66, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.color-swatch--none::after {
+  content: "\\00d7";
+  color: #172b4d;
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.label-editor__actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+}
+
+.full-width-button {
+  width: 100%;
+}
+
+/* Card Modal Revamp */
+.modal-shell__header-left, .modal-shell__header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.list-dropdown-button {
+  background: transparent;
+  color: #fff;
+  border: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.5rem;
+  opacity: 0.9;
+}
+.list-dropdown-button:hover {
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+}
+
+.card-title-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.card-title-icon {
+  margin-top: 0.2rem;
+  color: #a6c5e2;
+}
+
+.field--main-title input {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+  background: transparent;
+  border: 2px solid transparent;
+  color: #fff;
+  padding: 0;
+  box-shadow: none;
+  width: 100%;
+}
+.field--main-title input:focus {
+  background: var(--surface-raised);
+  border-color: var(--focus-ring);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  margin-left: -0.5rem;
+  margin-right: -0.5rem;
+}
+
+.quick-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  margin-left: 2.25rem;
+}
+
+.pill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 0;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.pill-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.card-inline-labels {
+  margin-left: 2.25rem;
+  margin-bottom: 2rem;
+}
+.card-inline-labels h5 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #8c9bab;
+  margin: 0 0 0.5rem;
+}
+.card-inline-labels__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.label-popover-wrapper {
+  position: relative;
+}
+
+.label-add-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 28px;
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.label-add-button:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.label-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 0.5rem;
+  width: 280px;
+  background: var(--surface-overlay);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  z-index: 100;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.inline-description-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.inline-description-header h5 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+.inline-description {
+  margin-bottom: 2rem;
+  margin-left: 2.25rem;
+}
+.inline-description textarea {
+  background: rgba(255,255,255,0.05);
+  border: 0;
+}
+.inline-description textarea:focus {
+  background: #fff;
+  color: #172b4d;
+}
+
 @media (max-width: 640px) {
   .cookie-banner,
   .board-header,
