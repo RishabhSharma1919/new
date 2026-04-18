@@ -90,8 +90,10 @@ export function ListColumn({
                   <path d="M2 12h20 M5 9l-3 3 3 3 M19 9l3 3-3 3" />
                 </svg>
               </button>
-              <div className="list-column__collapsed-title">{list.title}</div>
-              <div className="list-column__collapsed-count">{list.cards.length}</div>
+              <div className="list-column__collapsed-title-wrapper">
+                <span className="list-column__collapsed-title">{list.title}</span>
+                <span className="list-column__collapsed-count">{list.cards.length}</span>
+              </div>
             </div>
           ) : (
             <div className="list-column__header" {...provided.dragHandleProps}>
