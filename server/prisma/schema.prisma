@@ -63,6 +63,7 @@ model Card {
   dueDate     DateTime?
   position    Int
   isArchived  Boolean      @default(false)
+  isComplete  Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   list        BoardList    @relation(fields: [listId], references: [id], onDelete: Cascade)

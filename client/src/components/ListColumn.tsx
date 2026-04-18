@@ -12,6 +12,7 @@ type ListColumnProps = {
   onDeleteList: (listId: string) => Promise<void>;
   onOpenCard: (cardId: string) => void;
   onRenameList: (listId: string, title: string) => Promise<void>;
+  onToggleCardComplete: (cardId: string, isComplete: boolean) => Promise<void>;
 };
 
 export function ListColumn({
@@ -22,6 +23,7 @@ export function ListColumn({
   onDeleteList,
   onOpenCard,
   onRenameList,
+  onToggleCardComplete,
 }: ListColumnProps) {
   const themeClass = LIST_THEME_CLASSES[index % LIST_THEME_CLASSES.length];
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -199,7 +201,7 @@ export function ListColumn({
                             {...cardProvided.dragHandleProps}
                             className="draggable-card"
                           >
-                            <CardTile card={card} onOpen={onOpenCard} isDragging={cardSnapshot.isDragging} />
+                            <CardTile card={card} onOpen={onOpenCard} isDragging={cardSnapshot.isDragging} onToggleComplete={onToggleCardComplete} />
                           </div>
                         );
 

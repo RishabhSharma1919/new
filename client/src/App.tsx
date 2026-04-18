@@ -609,6 +609,9 @@ export default function App() {
                               onRenameList={(listId, title) =>
                                 syncBoardMutation(api.updateList(listId, { title }), currentBoard.id)
                               }
+                              onToggleCardComplete={(cardId, isComplete) =>
+                                syncBoardMutation(api.updateCard(cardId, { isComplete }), currentBoard.id)
+                              }
                             />
                           ))}
 

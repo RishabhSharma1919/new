@@ -1034,11 +1034,58 @@ svg {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  padding: 0.25rem 0.48rem;
-  border-radius: 6px;
-  color: #ffffff;
+  padding: 0;
+  border-radius: 4px;
+  color: transparent;
   font-size: 0.68rem;
   font-weight: 700;
+  width: 40px;
+  height: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  line-height: normal; /* to reset inline height */
+}
+
+.card-label:hover {
+  width: auto;
+  height: auto;
+  padding: 0.25rem 0.48rem;
+  color: #ffffff;
+}
+
+.card-tile__title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.2rem 0;
+}
+
+.card-tile__complete-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: transparent; /* hide tick by default */
+  border: 1px solid rgba(255,255,255, 0.2);
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.card-tile__complete-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.card-tile__complete-btn.is-completed {
+  background: #216e4e; /* green tick background */
+  border-color: #216e4e;
+  color: #fff;
 }
 
 .card-tile__title {
@@ -1046,6 +1093,12 @@ svg {
   color: #edf0f2;
   font-size: 0.9rem;
   line-height: 1.35;
+  transition: color 0.2s;
+}
+
+.card-tile__title.is-completed {
+  color: rgba(255,255,255, 0.4);
+  text-decoration: line-through;
 }
 
 .card-tile__footer {
@@ -1079,6 +1132,11 @@ svg {
 .due-badge.is-overdue {
   background: rgba(248, 113, 104, 0.24);
   color: #ffd5d2;
+}
+
+.due-badge.is-completed {
+  background: #8cce4b;
+  color: #1a4a15;
 }
 
 .due-badge.is-empty {

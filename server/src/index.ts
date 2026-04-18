@@ -318,10 +318,12 @@ app.patch("/api/cards/:cardId", asyncRoute(async (request, response) => {
   const coverImage = request.body?.coverImage;
   const labelIds = request.body?.labelIds;
   const memberIds = request.body?.memberIds;
+  const isComplete = request.body?.isComplete;
   const hasCardDetailChanges =
     typeof title === "string" ||
     typeof description === "string" ||
     typeof dueDate === "string" ||
+    typeof isComplete === "boolean" ||
     dueDate === null ||
     Array.isArray(labelIds) ||
     Array.isArray(memberIds);
@@ -344,6 +346,10 @@ app.patch("/api/cards/:cardId", asyncRoute(async (request, response) => {
 
     if (typeof coverImage === "string" || coverImage === null) {
       updateData.coverImage = typeof coverImage === "string" && coverImage.trim() ? coverImage.trim() : null;
+    }
+
+    if (typeof isComplete === "boolean") {
+      updateData.isComplete = isComplete;
     }
 
     if (Object.keys(updateData).length > 0) {

@@ -69,6 +69,7 @@ export type Card = {
   dueDate: string | null;
   position: number;
   isArchived: boolean;
+  isComplete: boolean;
   createdAt: string;
   updatedAt: string;
   labels: Label[];

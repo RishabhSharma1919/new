@@ -101,6 +101,7 @@ export const api = {
       description?: string;
       coverImage?: string | null;
       dueDate?: string | null;
+      isComplete?: boolean;
       labelIds?: string[];
       memberIds?: string[];
     },

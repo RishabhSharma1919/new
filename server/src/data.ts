@@ -262,7 +262,8 @@ function serializeBoard(board: BoardDetails) {
         dueDate: card.dueDate,
         position: card.position,
         isArchived: card.isArchived,
-        createdAt: card.createdAt,
+        isComplete: card.isComplete,
+        createdAt: card.createdAt.toISOString(),
         updatedAt: card.updatedAt,
         labels: card.labels.map((cardLabel) => ({
           id: cardLabel.label.id,
