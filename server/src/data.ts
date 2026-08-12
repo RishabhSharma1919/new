@@ -92,8 +92,9 @@ export const DEFAULT_LABELS = [
   { name: "Priority", color: "#dc2626" },
 ];
 
-export async function getBoardSummaries() {
+export async function getBoardSummaries(userId?: string) {
   const boards = await prisma.board.findMany({
+    where: userId ? { members: { some: { userId } } } : undefined,
     orderBy: {
       createdAt: "asc",
     },

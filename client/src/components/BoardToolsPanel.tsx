@@ -14,6 +14,7 @@ type BoardToolsPanelProps = {
   onShareBoard: () => void;
   onToggleStar: () => void;
   onUpdateBoard: (boardId: string, payload: { title?: string; background?: string }) => Promise<void>;
+  onInviteMember: (boardId: string, payload: { email: string; name?: string }) => Promise<void>;
 };
 
 const POWER_UPS = [
@@ -46,11 +47,14 @@ export function BoardToolsPanel({
   onShareBoard,
   onToggleStar,
   onUpdateBoard,
+  onInviteMember,
 }: BoardToolsPanelProps) {
   const [title, setTitle] = useState("");
   const [background, setBackground] = useState(backgrounds[0] ?? "ocean");
   const [view, setView] = useState<BoardToolsView>(initialView);
   const [isSaving, setIsSaving] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!board) {
@@ -72,6 +76,12 @@ export function BoardToolsPanel({
   }
 
   const activeBoard = board;
+
+  async function invite(event: FormEvent) {
+    event.preventDefault(); setInviteMessage(null);
+    try { await onInviteMember(activeBoard.id, { email: inviteEmail }); setInviteEmail(""); setInviteMessage("Teammate added to this workspace."); }
+    catch (error) { setInviteMessage(error instanceof Error ? error.message : "Could not invite teammate."); }
+  }
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -183,6 +193,12 @@ export function BoardToolsPanel({
 
         {view === "members" ? (
           <div className="utility-stack">
+            <form className="workspace-card invite-form" onSubmit={invite}>
+              <div className="workspace-card__header"><h3>Invite to workspace</h3><span>Live access</span></div>
+              <p>Invite a teammate by email. They can create an account with that email to join.</p>
+              <div className="invite-form__row"><input required type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="teammate@company.com" /><button className="primary-button" type="submit">Invite</button></div>
+              {inviteMessage ? <p className="invite-form__message">{inviteMessage}</p> : null}
+            </form>
             <div className="workspace-card">
               <div className="workspace-card__header">
                 <h3>Board members</h3>

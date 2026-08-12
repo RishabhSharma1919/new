@@ -396,6 +396,7 @@ export function CardModal({
               </div>
               <label className="field field--main-title">
                 <input 
+                  maxLength={200}
                   value={title} 
                   onChange={(event) => setTitle(event.target.value)} 
                   onBlur={() => {

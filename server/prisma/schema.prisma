@@ -10,6 +10,8 @@ datasource db {
 model User {
   id         String        @id @default(cuid())
   name       String
+  email      String?       @unique
+  passwordHash String       @default("")
   avatar     String
   color      String
   createdAt  DateTime      @default(now())
@@ -23,7 +25,7 @@ model Board {
   background String        @default("ocean")
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
-  lists      BoardList[]
+  lists      BoardList[] 
   labels     Label[]
   members    BoardMember[]
 }

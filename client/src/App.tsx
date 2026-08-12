@@ -1,7 +1,8 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
+import { io } from "socket.io-client";
 import useSWR, { useSWRConfig } from "swr";
-import { api, fetcher, type BoardsPayload } from "./lib/api";
+import { api, fetcher, setAuthToken, socketUrl, type BoardsPayload, type SessionUser } from "./lib/api";
 import { countVisibleCards, filterBoard } from "./lib/utils";
 import type { Board, BoardResponse, FilterState } from "./types";
 import { BoardHeader } from "./components/BoardHeader";
@@ -13,6 +14,7 @@ import { InboxView } from "./components/InboxView";
 import { ListColumn } from "./components/ListColumn";
 import { PlannerView } from "./components/PlannerView";
 import { WorkspaceGuidePanel } from "./components/WorkspaceGuidePanel";
+import { AuthScreen } from "./components/AuthScreen";
 
 const EMPTY_FILTERS: FilterState = {
   search: "",
@@ -24,11 +26,36 @@ const EMPTY_FILTERS: FilterState = {
 const STARRED_BOARDS_STORAGE_KEY = "trellis-starred-boards";
 
 type WorkspaceView = "home" | "board" | "inbox" | "planner";
+type ActiveView = "board" | "inbox" | "planner";
 type GuideMode = "guide" | "updates";
 
 export default function App() {
   const { mutate: globalMutate } = useSWRConfig();
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() => getHashState().view ?? "board");
+  const [user, setUser] = useState<SessionUser | null>(() => {
+    try { return JSON.parse(window.localStorage.getItem("working-place-user") ?? "null"); } catch { return null; }
+  });
+  const [isHomeOpen, setIsHomeOpen] = useState(() => getHashState().view === "home");
+  const [activeViews, setActiveViews] = useState<ActiveView[]>(() => {
+    const rawView = getHashState().rawView;
+    if (rawView && rawView !== "home") {
+      const views = rawView.split(",").filter(v => v === "board" || v === "inbox" || v === "planner") as ActiveView[];
+      if (views.length > 0) return views;
+    }
+    return ["board"];
+  });
+
+  function toggleView(view: ActiveView) {
+    setIsHomeOpen(false);
+    setActiveViews((current) => {
+      if (current.includes(view)) {
+        if (current.length > 1) {
+          return current.filter((v) => v !== view);
+        }
+        return current;
+      }
+      return [...current, view];
+    });
+  }
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(() => getHashState().boardId ?? null);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [activeCardId, setActiveCardId] = useState<string | null>(() => getHashState().cardId ?? null);
@@ -44,9 +71,9 @@ export default function App() {
   const [guideMode, setGuideMode] = useState<GuideMode>("guide");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const { data: boardsData, isLoading: isLoadingBoards } = useSWR<BoardsPayload>("/boards", fetcher);
+  const { data: boardsData, isLoading: isLoadingBoards } = useSWR<BoardsPayload>(user ? "/boards" : null, fetcher);
   const { data: boardData, mutate: mutateBoard } = useSWR<BoardResponse>(
-    selectedBoardId ? `/boards/${selectedBoardId}` : null,
+    user && selectedBoardId ? `/boards/${selectedBoardId}` : null,
     fetcher,
   );
 
@@ -54,6 +81,27 @@ export default function App() {
   const backgrounds = boardsData?.backgrounds ?? ["ocean", "sunset", "forest", "graphite"];
   const currentBoard = boardData?.board ?? null;
   const currentBoardIsStarred = currentBoard ? starredBoardIds.includes(currentBoard.id) : false;
+
+  useEffect(() => {
+    if (!user) return;
+    const socket = io(socketUrl, { auth: { token: window.localStorage.getItem("working-place-token") } });
+    socket.on("workspace:changed", (event: { actorId?: string }) => {
+      // The initiating client already has the mutation response. Refetching it again
+      // makes drag/drop and checklist updates feel delayed.
+      if (event.actorId === user.id) return;
+      void globalMutate("/boards");
+      if (selectedBoardId) void mutateBoard();
+    });
+    if (selectedBoardId) { socket.emit("board:join", selectedBoardId); socket.emit("board:presence", selectedBoardId); }
+    return () => { socket.disconnect(); };
+  }, [user, selectedBoardId, globalMutate, mutateBoard]);
+
+  async function handleAuth(payload: { name?: string; email: string; password: string }, mode: "login" | "register") {
+    const response = mode === "login" ? await api.login({ email: payload.email, password: payload.password }) : await api.register({ name: payload.name ?? "", email: payload.email, password: payload.password });
+    window.localStorage.setItem("working-place-token", response.token); window.localStorage.setItem("working-place-user", JSON.stringify(response.user));
+    setAuthToken(response.token); setUser(response.user); void globalMutate("/boards");
+  }
+  function signOut() { window.localStorage.removeItem("working-place-token"); window.localStorage.removeItem("working-place-user"); setAuthToken(null); setUser(null); setSelectedBoardId(null); }
 
   useEffect(() => {
     if (boards.length === 0) {
@@ -78,8 +126,12 @@ export default function App() {
     const syncFromHash = () => {
       const hashState = getHashState();
 
-      if (hashState.view) {
-        setWorkspaceView(hashState.view);
+      if (hashState.rawView === "home") {
+        setIsHomeOpen(true);
+      } else if (hashState.rawView) {
+        setIsHomeOpen(false);
+        const views = hashState.rawView.split(",").filter((v) => v === "board" || v === "inbox" || v === "planner") as ActiveView[];
+        if (views.length > 0) setActiveViews(views);
       }
 
       if (typeof hashState.boardId !== "undefined") {
@@ -102,9 +154,9 @@ export default function App() {
     writeHashState({
       boardId: selectedBoardId,
       cardId: activeCardId,
-      view: workspaceView,
+      view: isHomeOpen ? "home" : activeViews.join(","),
     });
-  }, [activeCardId, selectedBoardId, workspaceView]);
+  }, [activeCardId, selectedBoardId, isHomeOpen, activeViews]);
 
   useEffect(() => {
     if (!toastMessage || typeof window === "undefined") {
@@ -153,7 +205,8 @@ export default function App() {
 
   async function loadBoard(boardId: string, resetFilters = true) {
     setErrorMessage(null);
-    setWorkspaceView("board");
+    setIsHomeOpen(false);
+    setActiveViews((current) => current.includes("board") ? current : [...current, "board"]);
     setSelectedBoardId(boardId);
     setIsAddingList(false);
     setNewListTitle("");
@@ -190,7 +243,8 @@ export default function App() {
   async function handleCreateBoard(payload: { title: string; background: string }) {
     const response = await api.createBoard(payload);
     applyBoardResponse(response);
-    setWorkspaceView("board");
+    setIsHomeOpen(false);
+    setActiveViews((current) => current.includes("board") ? current : [...current, "board"]);
     setSelectedBoardId(response.board.id);
     setFilters(EMPTY_FILTERS);
     setIsAddingList(false);
@@ -220,7 +274,7 @@ export default function App() {
         setActiveCardId(null);
 
         if (!nextBoardId) {
-          setWorkspaceView("home");
+          setIsHomeOpen(true);
         }
       }
     } catch (error) {
@@ -267,7 +321,8 @@ export default function App() {
   }
 
   function openCard(cardId: string) {
-    setWorkspaceView("board");
+    setIsHomeOpen(false);
+    setActiveViews((current) => current.includes("board") ? current : [...current, "board"]);
     setActiveCardId(cardId);
   }
 
@@ -394,11 +449,13 @@ export default function App() {
     return <div className="app-loader">Loading workspace...</div>;
   }
 
+  if (!user) return <AuthScreen onSubmit={handleAuth} />;
+
   return (
     <div className="app-shell" data-background={currentBoard?.background ?? "ocean"}>
       <header className="global-nav">
         <div className="global-nav__left">
-          <button className="nav-launcher" onClick={() => setWorkspaceView("home")} type="button" aria-label="Open workspace home">
+          <button className="nav-launcher" onClick={() => setIsHomeOpen(true)} type="button" aria-label="Open workspace home">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path
                 d="M5.5 5.5h4.5v4.5H5.5Zm8.5 0h4.5v4.5H14Zm-8.5 8.5h4.5v4.5H5.5Zm8.5 0h4.5v4.5H14Z"
@@ -418,7 +475,7 @@ export default function App() {
                 <rect x="13.2" y="7.5" width="4.2" height="6" rx="1.2" fill="currentColor" />
               </svg>
             </span>
-            <span className="global-nav__brand-text">Trello</span>
+            <span className="global-nav__brand-text">Working Place</span>
           </button>
 
           <button className="global-nav__searchbar" onClick={() => setIsBoardPickerOpen(true)} type="button">
@@ -435,7 +492,7 @@ export default function App() {
             <span>Search boards</span>
           </button>
 
-          <button className="nav-pill nav-pill--primary" onClick={() => setWorkspaceView("home")} type="button">
+          <button className="nav-pill nav-pill--primary" onClick={() => setIsHomeOpen(true)} type="button">
             Create
           </button>
         </div>
@@ -466,7 +523,7 @@ export default function App() {
               />
             </svg>
           </button>
-          <button className="nav-icon-button" onClick={() => setWorkspaceView("inbox")} type="button" aria-label="Notifications">
+          <button className="nav-icon-button" onClick={() => { setIsHomeOpen(false); setActiveViews((c) => c.includes("inbox") ? c : [...c, "inbox"]); }} type="button" aria-label="Notifications">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path
                 d="M12 4.5a5 5 0 0 0-5 5v2.4c0 .7-.2 1.4-.6 2L5 16.5h14l-1.4-2.6a4 4 0 0 1-.6-2V9.5a5 5 0 0 0-5-5Zm-2 14a2 2 0 0 0 4 0"
@@ -497,16 +554,17 @@ export default function App() {
             type="button"
             aria-label="Open board members"
           >
-            AP
+            {user.avatar}
           </button>
+          <button className="nav-icon-button" onClick={signOut} type="button" aria-label="Sign out">↗</button>
         </div>
       </header>
 
-      <main className="workspace-main">
+      <main className={`workspace-main ${!isHomeOpen && activeViews.length > 1 ? "is-split" : ""}`}>
         {toastMessage ? <div className="notice-banner notice-banner--info">{toastMessage}</div> : null}
         {errorMessage ? <div className="notice-banner">{errorMessage}</div> : null}
 
-        {workspaceView === "home" ? (
+        {isHomeOpen ? (
           <BoardHome
             backgrounds={backgrounds}
             boards={boards}
@@ -515,195 +573,201 @@ export default function App() {
               void loadBoard(boardId);
             }}
           />
-        ) : null}
+        ) : (
+          <div className="workspace-panels">
+            {activeViews.map((view) => (
+              <div key={view} className={`workspace-panel workspace-panel--${view}`}>
+                {view === "inbox" && (
+                  <InboxView
+                    board={currentBoard}
+                    onOpenBoard={() => toggleView("board")}
+                    onOpenCard={openCard}
+                  />
+                )}
+                {view === "planner" && (
+                  <PlannerView
+                    board={currentBoard}
+                    onOpenBoard={() => toggleView("board")}
+                    onOpenCard={openCard}
+                  />
+                )}
+                {view === "board" && (
+                  currentBoard && visibleBoard ? (
+                    <>
+                      <BoardHeader
+                        board={currentBoard}
+                        dragDisabled={dragDisabled}
+                        filters={filters}
+                        isStarred={currentBoardIsStarred}
+                        showFilters={showFilters}
+                        totalVisibleCards={countVisibleCards(visibleBoard)}
+                        onClearFilters={() => setFilters(EMPTY_FILTERS)}
+                        onDueFilterChange={(due) => setFilters((current) => ({ ...current, due }))}
+                        onOpenBoardPicker={() => setIsBoardPickerOpen(true)}
+                        onOpenBoardTools={() => openBoardTools("overview")}
+                        onOpenMembers={() => openBoardTools("members")}
+                        onOpenPowerUps={() => openBoardTools("powerups")}
+                        onSearchChange={(search) => setFilters((current) => ({ ...current, search }))}
+                        onShareBoard={() => void handleShareBoard()}
+                        onToggleFilters={() => setShowFilters((current) => !current)}
+                        onToggleLabel={(labelId) =>
+                          setFilters((current) => ({
+                            ...current,
+                            labelIds: current.labelIds.includes(labelId)
+                              ? current.labelIds.filter((id) => id !== labelId)
+                              : [...current.labelIds, labelId],
+                          }))
+                        }
+                        onToggleMember={(memberId) =>
+                          setFilters((current) => ({
+                            ...current,
+                            memberIds: current.memberIds.includes(memberId)
+                              ? current.memberIds.filter((id) => id !== memberId)
+                              : [...current.memberIds, memberId],
+                          }))
+                        }
+                        onToggleStar={() => toggleBoardStar(currentBoard.id)}
+                      />
 
-        {workspaceView === "inbox" ? (
-          <InboxView
-            board={currentBoard}
-            onOpenBoard={() => setWorkspaceView("board")}
-            onOpenCard={openCard}
-          />
-        ) : null}
+                      <div className="board-stage">
+                        <button
+                          aria-label="Open starter guide"
+                          className="starter-guide-pill"
+                          onClick={() => openGuide("guide")}
+                          type="button"
+                        >
+                          <span className="starter-guide-pill__badge" aria-hidden="true">
+                            ↗
+                          </span>
+                          <span className="starter-guide-pill__label">Starter guide</span>
+                          <span className="starter-guide-pill__hint">Open</span>
+                        </button>
 
-        {workspaceView === "planner" ? (
-          <PlannerView
-            board={currentBoard}
-            onOpenBoard={() => setWorkspaceView("board")}
-            onOpenCard={openCard}
-          />
-        ) : null}
+                        <DragDropContext onDragEnd={(result) => void handleDragEnd(result)}>
+                          <Droppable
+                            direction="horizontal"
+                            droppableId="board-columns"
+                            isDropDisabled={dragDisabled}
+                            type="COLUMN"
+                          >
+                            {(provided) => (
+                              <div className="board-canvas" ref={provided.innerRef} {...provided.droppableProps}>
+                                <div className="board-canvas__scroll">
+                                  {visibleBoard.lists.map((list, index) => (
+                                    <ListColumn
+                                      key={list.id}
+                                      dragDisabled={dragDisabled}
+                                      index={index}
+                                      list={list}
+                                      onAddCard={(listId, title) =>
+                                        syncBoardMutation(api.createCard({ listId, title }), currentBoard.id)
+                                      }
+                                      onDeleteList={handleDeleteList}
+                                      onOpenCard={setActiveCardId}
+                                      onRenameList={(listId, title) =>
+                                        syncBoardMutation(api.updateList(listId, { title }), currentBoard.id)
+                                      }
+                                      onToggleCardComplete={(cardId, isComplete) =>
+                                        syncBoardMutation(api.updateCard(cardId, { isComplete }), currentBoard.id)
+                                      }
+                                    />
+                                  ))}
 
-        {workspaceView === "board" ? (
-          currentBoard && visibleBoard ? (
-            <>
-              <BoardHeader
-                board={currentBoard}
-                dragDisabled={dragDisabled}
-                filters={filters}
-                isStarred={currentBoardIsStarred}
-                showFilters={showFilters}
-                totalVisibleCards={countVisibleCards(visibleBoard)}
-                onClearFilters={() => setFilters(EMPTY_FILTERS)}
-                onDueFilterChange={(due) => setFilters((current) => ({ ...current, due }))}
-                onOpenBoardPicker={() => setIsBoardPickerOpen(true)}
-                onOpenBoardTools={() => openBoardTools("overview")}
-                onOpenMembers={() => openBoardTools("members")}
-                onOpenPowerUps={() => openBoardTools("powerups")}
-                onSearchChange={(search) => setFilters((current) => ({ ...current, search }))}
-                onShareBoard={() => void handleShareBoard()}
-                onToggleFilters={() => setShowFilters((current) => !current)}
-                onToggleLabel={(labelId) =>
-                  setFilters((current) => ({
-                    ...current,
-                    labelIds: current.labelIds.includes(labelId)
-                      ? current.labelIds.filter((id) => id !== labelId)
-                      : [...current.labelIds, labelId],
-                  }))
-                }
-                onToggleMember={(memberId) =>
-                  setFilters((current) => ({
-                    ...current,
-                    memberIds: current.memberIds.includes(memberId)
-                      ? current.memberIds.filter((id) => id !== memberId)
-                      : [...current.memberIds, memberId],
-                  }))
-                }
-                onToggleStar={() => toggleBoardStar(currentBoard.id)}
-              />
+                                  {provided.placeholder}
 
-              <div className="board-stage">
-                <button
-                  aria-label="Open starter guide"
-                  className="starter-guide-pill"
-                  onClick={() => openGuide("guide")}
-                  type="button"
-                >
-                  <span className="starter-guide-pill__badge" aria-hidden="true">
-                    ↗
-                  </span>
-                  <span className="starter-guide-pill__label">Starter guide</span>
-                  <span className="starter-guide-pill__hint">Open</span>
-                </button>
-
-                <DragDropContext onDragEnd={(result) => void handleDragEnd(result)}>
-                  <Droppable
-                    direction="horizontal"
-                    droppableId="board-columns"
-                    isDropDisabled={dragDisabled}
-                    type="COLUMN"
-                  >
-                    {(provided) => (
-                      <div className="board-canvas" ref={provided.innerRef} {...provided.droppableProps}>
-                        <div className="board-canvas__scroll">
-                          {visibleBoard.lists.map((list, index) => (
-                            <ListColumn
-                              key={list.id}
-                              dragDisabled={dragDisabled}
-                              index={index}
-                              list={list}
-                              onAddCard={(listId, title) =>
-                                syncBoardMutation(api.createCard({ listId, title }), currentBoard.id)
-                              }
-                              onDeleteList={handleDeleteList}
-                              onOpenCard={setActiveCardId}
-                              onRenameList={(listId, title) =>
-                                syncBoardMutation(api.updateList(listId, { title }), currentBoard.id)
-                              }
-                              onToggleCardComplete={(cardId, isComplete) =>
-                                syncBoardMutation(api.updateCard(cardId, { isComplete }), currentBoard.id)
-                              }
-                            />
-                          ))}
-
-                          {provided.placeholder}
-
-                          {isAddingList ? (
-                            <form className="add-list-panel is-open" onSubmit={handleAddList}>
-                              <textarea
-                                autoFocus
-                                placeholder="Enter list title..."
-                                rows={3}
-                                value={newListTitle}
-                                onChange={(event) => setNewListTitle(event.target.value)}
-                              />
-                              <div className="add-list-panel__actions">
-                                <button className="primary-button" type="submit">
-                                  Add list
-                                </button>
-                                <button
-                                  className="ghost-button"
-                                  onClick={() => {
-                                    setIsAddingList(false);
-                                    setNewListTitle("");
-                                  }}
-                                  type="button"
-                                >
-                                  Cancel
-                                </button>
+                                  {isAddingList ? (
+                                    <form className="add-list-panel is-open" onSubmit={handleAddList}>
+                                      <textarea
+                                        autoFocus
+                                        placeholder="Enter list title..."
+                                        rows={3}
+                                        value={newListTitle}
+                                        onChange={(event) => setNewListTitle(event.target.value)}
+                                      />
+                                      <div className="add-list-panel__actions">
+                                        <button className="primary-button" type="submit">
+                                          Add list
+                                        </button>
+                                        <button
+                                          className="ghost-button"
+                                          onClick={() => {
+                                            setIsAddingList(false);
+                                            setNewListTitle("");
+                                          }}
+                                          type="button"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </form>
+                                  ) : (
+                                    <button className="add-list-panel add-list-panel--collapsed" onClick={() => setIsAddingList(true)} type="button">
+                                      + Add another list
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            </form>
-                          ) : (
-                            <button className="add-list-panel add-list-panel--collapsed" onClick={() => setIsAddingList(true)} type="button">
-                              + Add another list
-                            </button>
-                          )}
-                        </div>
+                            )}
+                          </Droppable>
+                        </DragDropContext>
                       </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
-              </div>
 
-              {countVisibleCards(visibleBoard) === 0 ? (
-                <div className="board-empty">
-                  <div className="board-empty__card">
-                    <h3>No cards match the current filters</h3>
-                    <p>Clear the active search or filters to reveal the full board again.</p>
-                  </div>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <div className="board-empty">
-              <div className="board-empty__card">
-                <h3>{selectedBoardId ? "Loading board" : "No board selected"}</h3>
-                <p>
-                  {selectedBoardId
-                    ? "Fetching the latest board state."
-                    : "Open the board switcher to jump into a board or create a new one."}
-                </p>
+                      {countVisibleCards(visibleBoard) === 0 ? (
+                        <div className="board-empty">
+                          <div className="board-empty__card">
+                            <h3>No cards match the current filters</h3>
+                            <p>Clear the active search or filters to reveal the full board again.</p>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="board-empty">
+                      <div className="board-empty__card">
+                        <h3>{selectedBoardId ? "Loading board" : "No board selected"}</h3>
+                        <p>
+                          {selectedBoardId
+                            ? "Fetching the latest board state."
+                            : "Open the board switcher to jump into a board or create a new one."}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
-            </div>
-          )
-        ) : null}
+            ))}
+          </div>
+        )}
       </main>
 
-      <div className="floating-dock">
-        <button
-          className={`floating-dock__button ${workspaceView === "inbox" ? "is-active" : ""}`}
-          onClick={() => setWorkspaceView("inbox")}
-          type="button"
-        >
-          Inbox
-        </button>
-        <button
-          className={`floating-dock__button ${workspaceView === "planner" ? "is-active" : ""}`}
-          onClick={() => setWorkspaceView("planner")}
-          type="button"
-        >
-          Planner
-        </button>
-        <button
-          className={`floating-dock__button ${workspaceView === "board" ? "is-active" : ""}`}
-          onClick={() => setWorkspaceView("board")}
-          type="button"
-        >
-          Board
-        </button>
-        <button className="floating-dock__button" onClick={() => setIsBoardPickerOpen(true)} type="button">
-          Switch boards
-        </button>
-      </div>
+      {!isHomeOpen ? (
+        <div className="floating-dock">
+          <button
+            className={`floating-dock__button ${activeViews.includes("inbox") ? "is-active" : ""}`}
+            onClick={() => toggleView("inbox")}
+            type="button"
+          >
+            Inbox
+          </button>
+          <button
+            className={`floating-dock__button ${activeViews.includes("planner") ? "is-active" : ""}`}
+            onClick={() => toggleView("planner")}
+            type="button"
+          >
+            Planner
+          </button>
+          <button
+            className={`floating-dock__button ${activeViews.includes("board") ? "is-active" : ""}`}
+            onClick={() => toggleView("board")}
+            type="button"
+          >
+            Board
+          </button>
+          <button className="floating-dock__button" onClick={() => setIsBoardPickerOpen(true)} type="button">
+            Switch boards
+          </button>
+        </div>
+      ) : null}
 
       <BoardSidebar
         backgrounds={backgrounds}
@@ -735,6 +799,7 @@ export default function App() {
           }
         }}
         onUpdateBoard={handleUpdateBoard}
+        onInviteMember={(boardId, payload) => syncBoardMutation(api.inviteMember(boardId, payload), boardId)}
       />
 
       <WorkspaceGuidePanel
@@ -748,11 +813,11 @@ export default function App() {
         }}
         onOpenInbox={() => {
           setIsGuideOpen(false);
-          setWorkspaceView("inbox");
+          setIsHomeOpen(false); setActiveViews((c) => c.includes("inbox") ? c : [...c, "inbox"]);
         }}
         onOpenPlanner={() => {
           setIsGuideOpen(false);
-          setWorkspaceView("planner");
+          setIsHomeOpen(false); setActiveViews((c) => c.includes("planner") ? c : [...c, "planner"]);
         }}
       />
 
@@ -894,6 +959,7 @@ function getHashState(): {
   boardId?: string | null;
   cardId?: string | null;
   view?: WorkspaceView;
+  rawView?: string;
 } {
   if (typeof window === "undefined") {
     return {};
@@ -909,6 +975,7 @@ function getHashState(): {
     boardId,
     cardId,
     view: isWorkspaceView(view) ? view : undefined,
+    rawView: view ?? undefined,
   };
 }
 
@@ -923,7 +990,7 @@ function writeHashState({
 }: {
   boardId: string | null;
   cardId: string | null;
-  view: WorkspaceView;
+  view: string;
 }) {
   if (typeof window === "undefined") {
     return;

@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import cors from "cors";
 import express from "express";
+import { createServer } from "node:http";
+import { Server as SocketServer } from "socket.io";
 import {
   BOARD_BACKGROUNDS,
   DEFAULT_LABELS,
@@ -15,9 +17,14 @@ import {
 } from "./data.js";
 import { CORS_ORIGIN, PORT } from "./env.js";
 import { prisma } from "./prisma.js";
+import { createToken, hashPassword, readToken, verifyPassword, type SessionUser } from "./auth.js";
 
 const app = express();
 const port = PORT;
+const httpServer = createServer(app);
+const io = new SocketServer(httpServer, { cors: { origin: true, credentials: true } });
+
+declare global { namespace Express { interface Request { currentUser?: SessionUser } } }
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -36,6 +43,18 @@ function asyncRoute(handler: AsyncRouteHandler): express.RequestHandler {
   };
 }
 
+io.use((socket, next) => {
+  const user = readToken(socket.handshake.auth?.token);
+  if (!user) return next(new Error("Authentication required"));
+  socket.data.user = user;
+  next();
+});
+io.on("connection", (socket) => {
+  socket.on("board:join", (boardId: string) => socket.join(`board:${boardId}`));
+  socket.on("board:leave", (boardId: string) => socket.leave(`board:${boardId}`));
+  socket.on("board:presence", (boardId: string) => socket.to(`board:${boardId}`).emit("board:presence", { boardId, user: socket.data.user }));
+});
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -48,6 +67,54 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "10mb" }));
+
+app.post("/api/auth/register", asyncRoute(async (request, response) => {
+  const name = asTitle(request.body?.name);
+  const email = asString(request.body?.email)?.toLowerCase();
+  const password = asString(request.body?.password);
+  if (!name || !email || !/^\S+@\S+\.\S+$/.test(email) || !password || password.length < 8) {
+    response.status(400).json({ error: "Enter a name, valid email, and a password of at least 8 characters." }); return;
+  }
+  const avatar = name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const color = ["#2563eb", "#7c3aed", "#059669", "#c2410c", "#be185d"][Math.floor(Math.random() * 5)];
+  const existing = await prisma.user.findUnique({ where: { email } });
+  const passwordHash = await hashPassword(password);
+  const user = existing
+    ? existing.passwordHash ? null : await prisma.user.update({ where: { email }, data: { name, avatar, color, passwordHash } })
+    : await prisma.user.create({ data: { name, email, avatar, color, passwordHash } });
+  if (!user) { response.status(409).json({ error: "An account with this email already exists." }); return; }
+  const sessionUser = { id: user.id, name: user.name, email: user.email!, avatar: user.avatar, color: user.color };
+  response.status(201).json({ user: sessionUser, token: createToken(sessionUser) });
+}));
+
+app.post("/api/auth/login", asyncRoute(async (request, response) => {
+  const email = asString(request.body?.email)?.toLowerCase(); const password = asString(request.body?.password);
+  const user = email ? await prisma.user.findUnique({ where: { email } }) : null;
+  if (!user || !password || !user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
+    response.status(401).json({ error: "Email or password is incorrect." }); return;
+  }
+  const sessionUser = { id: user.id, name: user.name, email: user.email!, avatar: user.avatar, color: user.color };
+  response.json({ user: sessionUser, token: createToken(sessionUser) });
+}));
+
+app.get("/api/auth/me", (request, response) => {
+  const user = readToken(request.header("authorization")?.replace(/^Bearer\s+/i, ""));
+  if (!user) { response.status(401).json({ error: "Session expired. Please sign in again." }); return; }
+  response.json({ user });
+});
+
+app.use("/api", (request, response, next) => {
+  if (request.path === "/health" || request.path.startsWith("/auth/")) return next();
+  const user = readToken(request.header("authorization")?.replace(/^Bearer\s+/i, ""));
+  if (!user) { response.status(401).json({ error: "Please sign in to use Working Place." }); return; }
+  request.currentUser = user;
+  if (request.method !== "GET") {
+    response.on("finish", () => {
+      if (response.statusCode < 400) io.emit("workspace:changed", { actorId: user.id, at: Date.now() });
+    });
+  }
+  next();
+});
 
 app.get(
   "/api/health",
@@ -64,7 +131,7 @@ app.get(
 app.get(
   "/api/boards",
   asyncRoute(async (_request, response) => {
-    const boards = await getBoardSummaries();
+    const boards = await getBoardSummaries(_request.currentUser?.id);
     response.json({ boards, backgrounds: BOARD_BACKGROUNDS });
   }),
 );
@@ -78,11 +145,7 @@ app.post("/api/boards", asyncRoute(async (request, response) => {
     return;
   }
 
-  const users = await prisma.user.findMany({
-    orderBy: {
-      name: "asc",
-    },
-  });
+  const userId = request.currentUser!.id;
 
   const board = await prisma.board.create({
     data: {
@@ -91,10 +154,7 @@ app.post("/api/boards", asyncRoute(async (request, response) => {
         ? background
         : "ocean",
       members: {
-        create: users.map((user, index) => ({
-          userId: user.id,
-          role: index === 0 ? "admin" : "member",
-        })),
+        create: { userId, role: "admin" },
       },
       labels: {
         create: DEFAULT_LABELS,
@@ -115,6 +175,8 @@ app.post("/api/boards", asyncRoute(async (request, response) => {
 }));
 
 app.get("/api/boards/:boardId", asyncRoute(async (request, response) => {
+  const membership = await prisma.boardMember.findUnique({ where: { boardId_userId: { boardId: request.params.boardId, userId: request.currentUser!.id } } });
+  if (!membership) { response.status(403).json({ error: "You don't have access to this workspace." }); return; }
   const board = await getBoardDetails(request.params.boardId);
 
   if (!board) {
@@ -123,6 +185,22 @@ app.get("/api/boards/:boardId", asyncRoute(async (request, response) => {
   }
 
   response.json({ board });
+}));
+
+app.post("/api/boards/:boardId/members", asyncRoute(async (request, response) => {
+  const boardId = request.params.boardId;
+  const membership = await prisma.boardMember.findUnique({ where: { boardId_userId: { boardId, userId: request.currentUser!.id } } });
+  if (!membership || membership.role !== "admin") { response.status(403).json({ error: "Only workspace admins can invite people." }); return; }
+  const email = asString(request.body?.email)?.toLowerCase();
+  const name = asTitle(request.body?.name) ?? email?.split("@")[0];
+  if (!email || !/^\S+@\S+\.\S+$/.test(email) || !name) { response.status(400).json({ error: "Enter a valid teammate email." }); return; }
+  let user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    const avatar = name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+    user = await prisma.user.create({ data: { email, name, avatar, color: "#7c3aed" } });
+  }
+  await prisma.boardMember.upsert({ where: { boardId_userId: { boardId, userId: user.id } }, update: {}, create: { boardId, userId: user.id, role: "member" } });
+  response.status(201).json({ board: await getBoardDetails(boardId) });
 }));
 
 app.patch("/api/boards/:boardId", asyncRoute(async (request, response) => {
@@ -860,7 +938,7 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
   response.status(500).json({ error: "Something went wrong on the server." });
 });
 
-app.listen(port, () => {
+httpServer.listen(port, () => {
   console.log(`API running on http://localhost:${port}`);
 });
 

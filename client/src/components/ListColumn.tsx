@@ -221,6 +221,7 @@ export function ListColumn({
               <form className="new-card-form" onSubmit={handleAddCard}>
                 <textarea
                   autoFocus
+                  maxLength={200}
                   placeholder="Enter a title for this card..."
                   rows={3}
                   value={newCardTitle}

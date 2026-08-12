@@ -30,9 +30,9 @@ const boardLaunchCover = makeSvgDataUrl("Kanban Drag Pass", "#0f766e", "#2563eb"
 const personalSprintCover = makeSvgDataUrl("Docs Sprint", "#9a3412", "#fb923c");
 
 const users = [
-  { id: "user_arya", name: "Arya Patel", avatar: "AP", color: "#0f766e" },
-  { id: "user_zoe", name: "Zoe Kim", avatar: "ZK", color: "#b45309" },
-  { id: "user_liam", name: "Liam Chen", avatar: "LC", color: "#7c3aed" },
+  { id: "user_arya", name: "Arya Patel", email: "arya@example.com", avatar: "AP", color: "#0f766e" },
+  { id: "user_zoe", name: "Zoe Kim", email: "zoe@example.com", avatar: "ZK", color: "#b45309" },
+  { id: "user_liam", name: "Liam Chen", email: "liam@example.com", avatar: "LC", color: "#7c3aed" },
 ];
 
 const boardDefinitions = [
