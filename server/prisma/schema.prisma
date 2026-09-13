@@ -15,19 +15,49 @@ model User {
   avatar     String
   color      String
   createdAt  DateTime      @default(now())
+  organizationLinks OrganizationMember[]
   boardLinks BoardMember[]
   cardLinks  CardMember[]
 }
 
+model Organization {
+  id          String               @id @default(cuid())
+  name        String
+  slug        String
+  color       String               @default("#0c66e4")
+  description String               @default("")
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  members     OrganizationMember[]
+  boards      Board[]
+}
+
+model OrganizationMember {
+  organizationId String
+  userId         String
+  role           String       @default("member")
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+  @@index([userId])
+}
+
 model Board {
   id         String        @id @default(cuid())
+  organizationId String?
+  inviteCode String?       @unique
   title      String
   background String        @default("ocean")
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   lists      BoardList[] 
   labels     Label[]
   members    BoardMember[]
+
+  @@index([organizationId])
 }
 
 model BoardMember {

@@ -534,6 +534,8 @@ svg {
 .board-action-chip {
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
+  border-radius: 9999px;
+  padding: 0.4rem 1.2rem;
 }
 
 .board-action-chip:hover {
@@ -925,7 +927,7 @@ svg {
   min-width: 0;
   padding: 0.25rem 0.3rem;
   text-align: left;
-  color: #f7f8f9;
+  color: var(--text);
   font-size: 0.98rem;
   font-weight: 700;
   background: transparent;
@@ -1122,7 +1124,7 @@ svg {
 
 .card-tile__title {
   margin: 0;
-  color: #edf0f2;
+  color: var(--text);
   font-size: 0.9rem;
   line-height: 1.35;
   transition: color 0.2s;
@@ -2812,4 +2814,99 @@ button:disabled {
   .floating-dock::-webkit-scrollbar {
     display: none;
   }
+}
+
+.list-dropdown-button {
+  background: transparent;
+  color: #fff;
+  border: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.5rem;
+  opacity: 0.9;
+}
+.list-dropdown-button:hover {
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+}
+
+.card-title-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.card-title-icon {
+  margin-top: 0.2rem;
+  color: #a6c5e2;
+}
+
+.field--main-title input {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+  background: transparent;
+  border: 2px solid transparent;
+  color: #fff;
+  padding: 0;
+  box-shadow: none;
+  width: 100%;
+}
+.field--main-title input:focus {
+  background: var(--surface-raised);
+  border-color: var(--focus-ring);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  margin-left: -0.5rem;
+  margin-right: -0.5rem;
+}
+
+.quick-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  margin-left: 2.25rem;
+}
+
+.pill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 0;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.pill-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.card-inline-labels {
+  margin-left: 2.25rem;
+  margin-bottom: 2rem;
+}
+.card-inline-labels h5 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #8c9bab;
+  margin: 0 0 0.5rem;
+}
+.card-inline-labels__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
 }

@@ -31,6 +31,7 @@ export function ListColumn({
   const [newCardTitle, setNewCardTitle] = useState("");
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   async function handleRenameList() {
     const trimmed = draftTitle.trim();
@@ -163,24 +164,45 @@ export function ListColumn({
                     <path d="M4 12h6 M7 9l3 3-3 3 M20 12h-6 M17 9l-3 3 3 3" />
                   </svg>
                 </button>
-                <button
-                  className="list-column__menu"
-                  onClick={() => void onDeleteList(list.id)}
-                  type="button"
-                  aria-label="Delete list"
-                  title="Delete list"
-                >
-                  <svg aria-hidden="true" viewBox="0 0 24 24">
-                    <path
-                      d="M6.5 12h.01M12 12h.01M17.5 12h.01"
-                      fill="currentColor"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.9"
-                    />
-                  </svg>
-                </button>
+                <div style={{ position: "relative" }}>
+                  <button
+                    className="list-column__menu"
+                    onClick={() => setShowDeleteConfirm(!showDeleteConfirm)}
+                    type="button"
+                    aria-label="List options"
+                    title="List options"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path
+                        d="M6.5 12h.01M12 12h.01M17.5 12h.01"
+                        fill="currentColor"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.9"
+                      />
+                    </svg>
+                  </button>
+                  {showDeleteConfirm && (
+                    <div style={{ position: "absolute", top: "100%", right: 0, marginTop: "4px", backgroundColor: "#ffffff", padding: "12px", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 10, width: "200px", border: "1px solid #e5e7eb" }}>
+                      <p style={{ fontSize: "14px", fontWeight: 500, marginBottom: "12px", color: "#172b4d" }}>Delete this list?</p>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button
+                          style={{ flex: 1, padding: "6px", backgroundColor: "var(--danger-color, #ef4444)", color: "white", borderRadius: "4px", fontSize: "13px", fontWeight: 500 }}
+                          onClick={() => { setShowDeleteConfirm(false); void onDeleteList(list.id); }}
+                        >
+                          Delete
+                        </button>
+                        <button
+                          style={{ flex: 1, padding: "6px", backgroundColor: "#f3f4f6", color: "#4b5563", border: "1px solid var(--border-color)", borderRadius: "4px", fontSize: "13px" }}
+                          onClick={() => setShowDeleteConfirm(false)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

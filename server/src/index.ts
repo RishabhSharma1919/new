@@ -7,13 +7,16 @@ import {
   BOARD_BACKGROUNDS,
   DEFAULT_LABELS,
   DEFAULT_LIST_TITLES,
+  ensurePersonalOrganization,
   getBoardDetails,
   getBoardIdFromCard,
   getBoardIdFromChecklist,
   getBoardIdFromChecklistItem,
   getBoardIdFromList,
   getBoardSummaries,
+  getOrganizationSummaries,
   recordActivity,
+  slugify,
 } from "./data.js";
 import { CORS_ORIGIN, PORT } from "./env.js";
 import { prisma } from "./prisma.js";
@@ -28,8 +31,18 @@ declare global { namespace Express { interface Request { currentUser?: SessionUs
 
 const allowedOrigins = [
   "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
   "https://trellis-client-nine.vercel.app",
 ];
+
+function isOriginAllowed(origin?: string): boolean {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin) || CORS_ORIGIN === origin) return true;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  return false;
+}
 
 type AsyncRouteHandler = (
   request: express.Request,
@@ -58,12 +71,13 @@ io.on("connection", (socket) => {
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || CORS_ORIGIN === origin) {
+      if (isOriginAllowed(origin)) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
       }
     },
+    credentials: true,
   }),
 );
 app.use(express.json({ limit: "10mb" }));
@@ -84,6 +98,7 @@ app.post("/api/auth/register", asyncRoute(async (request, response) => {
     : await prisma.user.create({ data: { name, email, avatar, color, passwordHash } });
   if (!user) { response.status(409).json({ error: "An account with this email already exists." }); return; }
   const sessionUser = { id: user.id, name: user.name, email: user.email!, avatar: user.avatar, color: user.color };
+  await ensurePersonalOrganization(user.id, user.name);
   response.status(201).json({ user: sessionUser, token: createToken(sessionUser) });
 }));
 
@@ -97,6 +112,10 @@ app.post("/api/auth/login", asyncRoute(async (request, response) => {
   response.json({ user: sessionUser, token: createToken(sessionUser) });
 }));
 
+app.post("/api/auth/logout", (_request, response) => {
+  response.json({ ok: true });
+});
+
 app.get("/api/auth/me", (request, response) => {
   const user = readToken(request.header("authorization")?.replace(/^Bearer\s+/i, ""));
   if (!user) { response.status(401).json({ error: "Session expired. Please sign in again." }); return; }
@@ -104,7 +123,7 @@ app.get("/api/auth/me", (request, response) => {
 });
 
 app.use("/api", (request, response, next) => {
-  if (request.path === "/health" || request.path.startsWith("/auth/")) return next();
+  if (request.path === "/health" || request.path.startsWith("/auth/") || request.path.startsWith("/boards/invite/")) return next();
   const user = readToken(request.header("authorization")?.replace(/^Bearer\s+/i, ""));
   if (!user) { response.status(401).json({ error: "Please sign in to use Working Place." }); return; }
   request.currentUser = user;
@@ -131,14 +150,176 @@ app.get(
 app.get(
   "/api/boards",
   asyncRoute(async (_request, response) => {
-    const boards = await getBoardSummaries(_request.currentUser?.id);
+    const organizationId = asString(_request.query.organizationId);
+    if (organizationId) {
+      const membership = await prisma.organizationMember.findUnique({
+        where: { organizationId_userId: { organizationId, userId: _request.currentUser!.id } },
+      });
+      if (!membership) { response.status(403).json({ error: "You don't have access to this organization." }); return; }
+    }
+    const boards = await getBoardSummaries(_request.currentUser?.id, organizationId ?? undefined);
     response.json({ boards, backgrounds: BOARD_BACKGROUNDS });
   }),
 );
 
+app.get("/api/organizations", asyncRoute(async (request, response) => {
+  await ensurePersonalOrganization(request.currentUser!.id, request.currentUser!.name);
+  response.json({ organizations: await getOrganizationSummaries(request.currentUser!.id) });
+}));
+
+app.post("/api/organizations", asyncRoute(async (request, response) => {
+  const name = asTitle(request.body?.name);
+  const color = asString(request.body?.color) ?? "#0c66e4";
+  const description = typeof request.body?.description === "string" ? request.body.description.trim() : "";
+  if (!name) { response.status(400).json({ error: "Organization name is required." }); return; }
+
+  const organization = await prisma.organization.create({
+    data: {
+      name,
+      slug: slugify(name),
+      color,
+      description,
+      members: { create: { userId: request.currentUser!.id, role: "admin" } },
+    },
+  });
+
+  response.status(201).json({
+    organization,
+    organizations: await getOrganizationSummaries(request.currentUser!.id),
+  });
+}));
+
+app.post("/api/organizations/:organizationId/members", asyncRoute(async (request, response) => {
+  const organizationId = request.params.organizationId;
+  const membership = await prisma.organizationMember.findUnique({
+    where: { organizationId_userId: { organizationId, userId: request.currentUser!.id } },
+  });
+  if (!membership || membership.role !== "admin") {
+    response.status(403).json({ error: "Only organization admins can invite teammates." });
+    return;
+  }
+
+  const email = asString(request.body?.email)?.toLowerCase();
+  const name = asTitle(request.body?.name) ?? email?.split("@")[0];
+  if (!email || !/^\S+@\S+\.\S+$/.test(email) || !name) {
+    response.status(400).json({ error: "Enter a valid teammate email." });
+    return;
+  }
+
+  const avatar = name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: { name },
+    create: { email, name, avatar, color: "#0c66e4" },
+  });
+
+  await prisma.organizationMember.upsert({
+    where: { organizationId_userId: { organizationId, userId: user.id } },
+    update: {},
+    create: { organizationId, userId: user.id, role: "member" },
+  });
+
+  const boards = await prisma.board.findMany({
+    where: { organizationId, members: { some: { userId: request.currentUser!.id, role: "admin" } } },
+    select: { id: true },
+  });
+
+  if (boards.length > 0) {
+    await prisma.boardMember.createMany({
+      data: boards.map((board) => ({ boardId: board.id, userId: user.id, role: "member" })),
+      skipDuplicates: true,
+    });
+  }
+
+  response.status(201).json({
+    organizations: await getOrganizationSummaries(request.currentUser!.id),
+    invitedEmail: email,
+  });
+}));
+
+app.post("/api/boards/:boardId/invite-link", asyncRoute(async (request, response) => {
+  const boardId = request.params.boardId;
+  const membership = await prisma.boardMember.findUnique({
+    where: { boardId_userId: { boardId, userId: request.currentUser!.id } },
+  });
+  if (!membership || membership.role !== "admin") {
+    response.status(403).json({ error: "Only board admins can generate invite links." });
+    return;
+  }
+
+  let board = await prisma.board.findUnique({ where: { id: boardId } });
+  if (!board) {
+    response.status(404).json({ error: "Board not found." });
+    return;
+  }
+
+  if (!(board as any).inviteCode) {
+    const inviteCode = Math.random().toString(36).substring(2, 10);
+    board = await prisma.board.update({
+      where: { id: boardId },
+      data: { inviteCode },
+    });
+  }
+
+  response.json({ inviteCode: (board as any).inviteCode });
+}));
+
+app.get("/api/boards/invite/:inviteCode", asyncRoute(async (request, response) => {
+  const inviteCode = request.params.inviteCode;
+  const board = await prisma.board.findUnique({
+    where: { inviteCode },
+    select: { id: true, title: true, background: true, _count: { select: { members: true } } },
+  });
+
+  if (!board) {
+    response.status(404).json({ error: "Invalid or expired invite link." });
+    return;
+  }
+
+  response.json({ 
+    id: board.id, 
+    title: board.title, 
+    background: board.background, 
+    memberCount: board._count.members 
+  });
+}));
+
+app.post("/api/boards/join/:inviteCode", asyncRoute(async (request, response) => {
+  const inviteCode = request.params.inviteCode;
+  const user = request.currentUser!;
+
+  const board = await prisma.board.findUnique({
+    where: { inviteCode },
+  });
+
+  if (!board) {
+    response.status(404).json({ error: "Invalid or expired invite link." });
+    return;
+  }
+
+  if (board.organizationId) {
+    await prisma.organizationMember.upsert({
+      where: { organizationId_userId: { organizationId: board.organizationId, userId: user.id } },
+      update: {},
+      create: { organizationId: board.organizationId, userId: user.id, role: "member" },
+    });
+  }
+
+  await prisma.boardMember.upsert({
+    where: { boardId_userId: { boardId: board.id, userId: user.id } },
+    update: {},
+    create: { boardId: board.id, userId: user.id, role: "member" },
+  });
+
+  response.status(200).json({
+    board: await getBoardDetails(board.id),
+  });
+}));
+
 app.post("/api/boards", asyncRoute(async (request, response) => {
   const title = asTitle(request.body?.title);
   const background = typeof request.body?.background === "string" ? request.body.background : "ocean";
+  const organizationId = asString(request.body?.organizationId);
 
   if (!title) {
     response.status(400).json({ error: "Board title is required." });
@@ -146,9 +327,20 @@ app.post("/api/boards", asyncRoute(async (request, response) => {
   }
 
   const userId = request.currentUser!.id;
+  const organization = organizationId
+    ? await prisma.organizationMember.findUnique({ where: { organizationId_userId: { organizationId, userId } } })
+    : await ensurePersonalOrganization(userId, request.currentUser!.name);
+
+  if (!organization) {
+    response.status(403).json({ error: "You don't have access to this organization." });
+    return;
+  }
+
+  const resolvedOrganizationId = organizationId ?? (organization as any).id;
 
   const board = await prisma.board.create({
     data: {
+      organizationId: resolvedOrganizationId,
       title,
       background: BOARD_BACKGROUNDS.includes(background as (typeof BOARD_BACKGROUNDS)[number])
         ? background
@@ -170,7 +362,7 @@ app.post("/api/boards", asyncRoute(async (request, response) => {
 
   response.status(201).json({
     board: await getBoardDetails(board.id),
-    boards: await getBoardSummaries(),
+    boards: await getBoardSummaries(userId, resolvedOrganizationId),
   });
 }));
 
@@ -368,24 +560,35 @@ app.post("/api/cards", asyncRoute(async (request, response) => {
     select: { position: true },
   });
 
+  const description = typeof request.body?.description === "string" ? request.body.description : "";
+  const dueDate = request.body?.dueDate ? new Date(request.body.dueDate) : null;
+
   const card = await prisma.card.create({
     data: {
       listId,
       title,
+      description,
+      dueDate,
       position: (maxCard?.position ?? -1) + 1,
     },
   });
 
-  await recordActivity(card.id, "create", "created this card");
+  await recordActivity(card.id, "create", "created this card", request.currentUser?.name);
 
   response.status(201).json({ board: await getBoardDetails(boardId) });
 }));
 
 app.patch("/api/cards/:cardId", asyncRoute(async (request, response) => {
   const cardId = request.params.cardId;
+
+  const existingCard = await prisma.card.findUnique({
+    where: { id: cardId },
+    select: { isComplete: true },
+  });
+
   const boardId = await getBoardIdFromCard(cardId);
 
-  if (!boardId) {
+  if (!boardId || !existingCard) {
     response.status(404).json({ error: "Card not found." });
     return;
   }
@@ -473,7 +676,11 @@ app.patch("/api/cards/:cardId", asyncRoute(async (request, response) => {
   });
 
   if (hasCardDetailChanges) {
-    await recordActivity(cardId, "update", "updated card details");
+    let actionMsg = "updated card details";
+    if (typeof isComplete === "boolean" && isComplete !== existingCard.isComplete) {
+      actionMsg = isComplete ? "marked this card as complete" : "marked this card as incomplete";
+    }
+    await recordActivity(cardId, "update", actionMsg, request.currentUser?.name);
   }
 
   if (hasCoverImageChange) {
@@ -515,7 +722,7 @@ app.post("/api/cards/:cardId/attachments", asyncRoute(async (request, response) 
         fileUrl,
         mimeType,
         sizeBytes,
-        actorName: "Arya Patel",
+        actorName: request.currentUser?.name || "Anonymous",
       },
     });
 
@@ -607,15 +814,17 @@ app.post("/api/cards/:cardId/comments", asyncRoute(async (request, response) => 
     return;
   }
 
+  const actorName = request.currentUser?.name || asString(request.body?.actorName) || "Anonymous";
+
   await prisma.comment.create({
     data: {
       cardId,
       message,
-      actorName: "Arya Patel",
+      actorName,
     },
   });
 
-  await recordActivity(cardId, "comment", "added a comment");
+  await recordActivity(cardId, "comment", "added a comment", actorName);
 
   response.status(201).json({ board: await getBoardDetails(boardId) });
 }));

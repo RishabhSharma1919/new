@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Attachment, Board, Card } from "../types";
 import { formatDueDate, getChecklistStats } from "../lib/utils";
+import { MarkdownPreview } from "./MarkdownPreview";
+import { triggerConfetti } from "../lib/confetti";
 
 const MAX_FILE_SIZE_BYTES = 6 * 1024 * 1024;
 
@@ -44,11 +46,13 @@ type CardModalProps = {
   onCreateLabel?: (payload: { name: string; color: string }) => Promise<void>;
   onUpdateLabel?: (labelId: string, payload: { name?: string; color?: string }) => Promise<void>;
   onDeleteLabel?: (labelId: string) => Promise<void>;
+  currentUser?: { name: string; avatar?: string; color?: string; email?: string } | null;
 };
 
 export function CardModal({
   board,
   card,
+  currentUser,
   onAddAttachment,
   onAddChecklist,
   onAddChecklistItem,
@@ -85,6 +89,8 @@ export function CardModal({
   const [isRemovingCover, setIsRemovingCover] = useState(false);
   const [activeDockView, setActiveDockView] = useState<CardDockView>("comments");
   const [showActivityDetails, setShowActivityDetails] = useState(true);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [commentReactions, setCommentReactions] = useState<Record<string, Record<string, number>>>({});
   const [labelSearch, setLabelSearch] = useState("");
   const [isLabelPopoverOpen, setIsLabelPopoverOpen] = useState(false);
   const [editingLabelId, setEditingLabelId] = useState<string | "new" | null>(null);
@@ -612,28 +618,77 @@ export function CardModal({
               </div>
             </div>
 
-            <label className="field inline-description">
+            <div className="field inline-description">
               <div className="inline-description-header">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="3" y1="6" x2="21" y2="6"></line>
-                  <line x1="3" y1="12" x2="21" y2="12"></line>
-                  <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
-                <h5>Description</h5>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                  </svg>
+                  <h5>Description</h5>
+                </div>
+                <div className="description-mode-toggle">
+                  <button
+                    type="button"
+                    className={`description-tab-btn ${!isEditingDescription ? "is-active" : ""}`}
+                    onClick={() => setIsEditingDescription(false)}
+                  >
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    className={`description-tab-btn ${isEditingDescription ? "is-active" : ""}`}
+                    onClick={() => {
+                      setIsEditingDescription(true);
+                      setTimeout(() => descriptionRef.current?.focus(), 50);
+                    }}
+                  >
+                    Edit (Markdown)
+                  </button>
+                </div>
               </div>
-              <textarea
-                ref={descriptionRef}
-                placeholder="Add a more detailed description..."
-                rows={5}
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                onBlur={() => {
-                  if (description !== card.description) {
-                    void handleSave();
-                  }
-                }}
-              />
-            </label>
+
+              {isEditingDescription ? (
+                <div>
+                  <textarea
+                    ref={descriptionRef}
+                    placeholder="Add a detailed description... Markdown syntax supported: **bold**, *italic*, # Heading, - list, - [ ] checkbox."
+                    rows={6}
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    onBlur={() => {
+                      if (description !== card.description) {
+                        void handleSave();
+                      }
+                    }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.4rem" }}>
+                    <button
+                      type="button"
+                      className="primary-button pill-button"
+                      onClick={() => {
+                        void handleSave();
+                        setIsEditingDescription(false);
+                      }}
+                    >
+                      Save & Preview
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="description-preview-box"
+                  onClick={() => {
+                    setIsEditingDescription(true);
+                    setTimeout(() => descriptionRef.current?.focus(), 50);
+                  }}
+                  title="Click to edit"
+                >
+                  <MarkdownPreview content={description} />
+                </div>
+              )}
+            </div>
 
             <div className="modal-inline-fields">
               <label className="field">
@@ -713,7 +768,7 @@ export function CardModal({
                             onClick={() => void onDeleteAttachment(attachment.id)}
                             type="button"
                           >
-                            Delete
+                            🗑️
                           </button>
                         </div>
                       </div>
@@ -758,11 +813,18 @@ export function CardModal({
                           <input
                             checked={item.isComplete}
                             type="checkbox"
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              const willBeComplete = event.target.checked;
+                              if (willBeComplete) {
+                                const remaining = checklist.items.filter((i) => !i.isComplete && i.id !== item.id);
+                                if (remaining.length === 0) {
+                                  triggerConfetti();
+                                }
+                              }
                               void onUpdateChecklistItem(item.id, {
-                                isComplete: event.target.checked,
-                              })
-                            }
+                                isComplete: willBeComplete,
+                              });
+                            }}
                           />
                           <input
                             className={`inline-input ${item.isComplete ? "is-complete" : ""}`}
@@ -963,10 +1025,27 @@ export function CardModal({
                 </button>
               </div>
 
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.45rem", fontSize: "0.82rem", color: "var(--text-soft)" }}>
+                <span
+                  className="avatar-chip"
+                  style={{
+                    width: "1.45rem",
+                    height: "1.45rem",
+                    fontSize: "0.68rem",
+                    backgroundColor: currentUser?.color || "#0c66e4",
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {currentUser?.avatar || "ME"}
+                </span>
+                <span>Commenting as <strong style={{ color: "var(--text)" }}>{currentUser?.name || "You"}</strong></span>
+              </div>
+
               <label className="field field--comment-box">
                 <textarea
                   ref={commentComposerRef}
-                  placeholder="Write a comment..."
+                  placeholder={`Write a comment as ${currentUser?.name || "yourself"}...`}
                   rows={2}
                   value={newComment}
                   onChange={(event) => setNewComment(event.target.value)}
@@ -982,15 +1061,61 @@ export function CardModal({
 
               <div className="comment-list">
                 {card.comments.length > 0 ? (
-                  card.comments.map((comment) => (
-                    <div className="comment-item" key={comment.id}>
-                      <div className="comment-item__header">
-                        <strong>{comment.actorName ?? "Someone"}</strong>
-                        <small>{new Date(comment.createdAt).toLocaleString()}</small>
+                  card.comments.map((comment) => {
+                    const reactions = commentReactions[comment.id] ?? {};
+                    const member = board.members.find((m) => m.name.toLowerCase() === comment.actorName?.toLowerCase());
+                    const initials = member?.avatar || (comment.actorName ? comment.actorName.slice(0, 2).toUpperCase() : "??");
+                    const color = member?.color || (comment.actorName === currentUser?.name ? currentUser?.color : "#0c66e4") || "#0c66e4";
+                    return (
+                      <div className="comment-item" key={comment.id}>
+                        <div className="comment-item__header">
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span
+                              className="avatar-chip"
+                              style={{
+                                width: "1.65rem",
+                                height: "1.65rem",
+                                fontSize: "0.72rem",
+                                backgroundColor: color,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {initials}
+                            </span>
+                            <strong>{comment.actorName ?? "Someone"}</strong>
+                          </div>
+                          <small>{new Date(comment.createdAt).toLocaleString()}</small>
+                        </div>
+                        <p>{comment.message}</p>
+                        <div className="comment-reactions-bar">
+                          {(["👍", "❤️", "🚀", "🎉", "👀"] as const).map((emoji) => {
+                            const count = reactions[emoji] ?? 0;
+                            return (
+                              <button
+                                key={emoji}
+                                type="button"
+                                className={`reaction-btn ${count > 0 ? "has-count" : ""}`}
+                                onClick={() => {
+                                  setCommentReactions((prev) => {
+                                    const current = prev[comment.id] ?? {};
+                                    const nextCount = (current[emoji] ?? 0) + 1;
+                                    return {
+                                      ...prev,
+                                      [comment.id]: { ...current, [emoji]: nextCount },
+                                    };
+                                  });
+                                }}
+                              >
+                                <span>{emoji}</span>
+                                {count > 0 && <span className="reaction-count">{count}</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <p>{comment.message}</p>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <p className="empty-inline">No comments yet.</p>
                 )}

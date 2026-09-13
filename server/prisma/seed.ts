@@ -1,6 +1,16 @@
+import { randomBytes, scrypt as scryptCallback } from "node:crypto";
+import { promisify } from "node:util";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+const scrypt = promisify(scryptCallback);
+const demoPassword = "password123";
+
+async function hashPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const key = await scrypt(password, salt, 64) as Buffer;
+  return `${salt}:${key.toString("hex")}`;
+}
 
 function makeSvgDataUrl(title: string, accentColor: string, backgroundColor: string) {
   const svg = `
@@ -249,6 +259,8 @@ const boardDefinitions = [
 ];
 
 async function main() {
+  const demoPasswordHash = await hashPassword(demoPassword);
+
   await prisma.comment.deleteMany();
   await prisma.attachment.deleteMany();
   await prisma.activity.deleteMany();
@@ -263,7 +275,7 @@ async function main() {
   await prisma.board.deleteMany();
   await prisma.user.deleteMany();
 
-  await prisma.user.createMany({ data: users });
+  await prisma.user.createMany({ data: users.map((user) => ({ ...user, passwordHash: demoPasswordHash })) });
 
   for (const boardDef of boardDefinitions) {
     await prisma.board.create({

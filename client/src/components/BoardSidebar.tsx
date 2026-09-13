@@ -30,6 +30,7 @@ export function BoardSidebar({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showStarredOnly, setShowStarredOnly] = useState(false);
   const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const searchedBoards = useMemo(() => {
     const search = query.trim().toLowerCase();
@@ -58,11 +59,14 @@ export function BoardSidebar({
     }
 
     setIsSubmitting(true);
+    setCreateError(null);
 
     try {
       await onCreateBoard({ title: trimmedTitle, background });
       setTitle("");
       setQuery("");
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "Could not create this board.");
     } finally {
       setIsSubmitting(false);
     }
@@ -221,6 +225,7 @@ export function BoardSidebar({
                 Close
               </button>
             </div>
+            {createError ? <p className="inline-error">{createError}</p> : null}
           </form>
         </section>
       </aside>

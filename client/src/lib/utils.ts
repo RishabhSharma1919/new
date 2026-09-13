@@ -96,3 +96,69 @@ export function countVisibleCards(board: Board) {
   return board.lists.reduce((sum, list) => sum + list.cards.length, 0);
 }
 
+export type Priority = "urgent" | "high" | "medium" | "low" | null;
+
+export function getCardPriority(card: Card): Priority {
+  const lowerTitle = card.title.toLowerCase();
+  if (lowerTitle.includes("[urgent]") || lowerTitle.startsWith("urgent:")) return "urgent";
+  if (lowerTitle.includes("[high]") || lowerTitle.startsWith("high:")) return "high";
+  if (lowerTitle.includes("[medium]") || lowerTitle.startsWith("med:") || lowerTitle.startsWith("medium:")) return "medium";
+  if (lowerTitle.includes("[low]") || lowerTitle.startsWith("low:")) return "low";
+
+  for (const label of card.labels) {
+    const lName = label.name.toLowerCase();
+    if (lName === "urgent" || lName === "critical") return "urgent";
+    if (lName === "high" || lName === "p1") return "high";
+    if (lName === "medium" || lName === "p2") return "medium";
+    if (lName === "low" || lName === "p3") return "low";
+  }
+  return null;
+}
+
+export function cleanCardTitle(title: string): string {
+  return title
+    .replace(/\[(urgent|high|medium|low|med)\]/gi, "")
+    .replace(/^(urgent|high|medium|low|med):\s*/i, "")
+    .trim();
+}
+
+export function exportBoardAsMarkdown(board: Board): string {
+  let md = `# ${board.title}\n\n`;
+  md += `*Exported on ${new Date().toLocaleDateString()}*\n\n`;
+
+  for (const list of board.lists) {
+    md += `## 📋 ${list.title} (${list.cards.length})\n\n`;
+    if (list.cards.length === 0) {
+      md += `*(Empty)*\n\n`;
+      continue;
+    }
+    for (const card of list.cards) {
+      const priority = getCardPriority(card);
+      const priorityTag = priority ? ` [${priority.toUpperCase()}]` : "";
+      const statusTag = card.isComplete ? " ✅" : "";
+      md += `### ${cleanCardTitle(card.title)}${priorityTag}${statusTag}\n\n`;
+      if (card.description) {
+        md += `${card.description}\n\n`;
+      }
+      if (card.dueDate) {
+        md += `- **Due Date**: ${formatDueDate(card.dueDate)}\n`;
+      }
+      if (card.labels.length > 0) {
+        md += `- **Labels**: ${card.labels.map((l) => l.name).join(", ")}\n`;
+      }
+      if (card.members.length > 0) {
+        md += `- **Assigned to**: ${card.members.map((m) => m.name).join(", ")}\n`;
+      }
+      for (const cl of card.checklists) {
+        md += `\n**${cl.title}**:\n`;
+        for (const item of cl.items) {
+          md += `- [${item.isComplete ? "x" : " "}] ${item.title}\n`;
+        }
+      }
+      md += "\n---\n\n";
+    }
+  }
+  return md;
+}
+
+

@@ -1,5 +1,6 @@
-import { createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
+import jwt from "jsonwebtoken";
 
 const scrypt = promisify(scryptCallback);
 const secret = process.env.AUTH_SECRET ?? "change-this-working-place-secret-in-production";
@@ -21,19 +22,15 @@ export async function verifyPassword(password: string, stored: string) {
 }
 
 export function createToken(user: SessionUser) {
-  const payload = Buffer.from(JSON.stringify({ ...user, exp: Date.now() + 1000 * 60 * 60 * 24 * 14 })).toString("base64url");
-  const signature = createHmac("sha256", secret).update(payload).digest("base64url");
-  return `${payload}.${signature}`;
+  return jwt.sign(user, secret, { expiresIn: "7d" });
 }
 
 export function readToken(token?: string): SessionUser | null {
   if (!token) return null;
-  const [payload, signature] = token.split(".");
-  if (!payload || !signature) return null;
-  const expected = createHmac("sha256", secret).update(payload).digest("base64url");
-  if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
   try {
-    const user = JSON.parse(Buffer.from(payload, "base64url").toString()) as SessionUser & { exp: number };
-    return user.exp > Date.now() ? { id: user.id, name: user.name, email: user.email, avatar: user.avatar, color: user.color } : null;
-  } catch { return null; }
+    const payload = jwt.verify(token, secret) as SessionUser;
+    return { id: payload.id, name: payload.name, email: payload.email, avatar: payload.avatar, color: payload.color };
+  } catch { 
+    return null; 
+  }
 }

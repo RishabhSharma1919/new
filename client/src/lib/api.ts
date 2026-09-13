@@ -28,6 +28,11 @@ export async function fetcher<T>(path: string): Promise<T> {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.localStorage.removeItem("working-place-user");
+      window.localStorage.removeItem("working-place-token");
+      authToken = null;
+    }
     throw new Error(payload?.error ?? "Request failed.");
   }
 
@@ -46,6 +51,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.localStorage.removeItem("working-place-user");
+      window.localStorage.removeItem("working-place-token");
+      authToken = null;
+    }
     throw new Error(payload?.error ?? "Request failed.");
   }
 
@@ -58,6 +68,10 @@ export const api = {
   },
   login(payload: { email: string; password: string }) {
     return request<{ user: SessionUser; token: string }>("/auth/login", { method: "POST", body: JSON.stringify(payload) });
+  },
+  async logout() {
+    await request<{ ok: boolean }>("/auth/logout", { method: "POST" }).catch(() => ({ ok: true }));
+    return { ok: true };
   },
   getBoards() {
     return request<BoardsPayload>("/boards");
@@ -103,7 +117,7 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
-  createCard(payload: { listId: string; title: string }) {
+  createCard(payload: { listId: string; title: string; description?: string; dueDate?: string }) {
     return request<BoardResponse>("/cards", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -228,6 +242,21 @@ export const api = {
   deleteBoard(boardId: string) {
     return request<BoardsPayload>(`/boards/${boardId}`, {
       method: "DELETE",
+    });
+  },
+  generateInviteCode(boardId: string) {
+    return request<{ inviteCode: string }>(`/boards/${boardId}/invite-link`, {
+      method: "POST",
+    });
+  },
+  getInviteInfo(inviteCode: string) {
+    return request<{ id: string; title: string; background: string; memberCount: number }>(`/boards/invite/${inviteCode}`, {
+      method: "GET",
+    });
+  },
+  joinBoard(inviteCode: string) {
+    return request<{ board: any }>(`/boards/join/${inviteCode}`, {
+      method: "POST",
     });
   },
 };

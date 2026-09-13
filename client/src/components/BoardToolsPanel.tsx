@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import type { Board } from "../types";
+import { api } from "../lib/api";
 
 export type BoardToolsView = "overview" | "members" | "powerups";
 
@@ -15,6 +16,8 @@ type BoardToolsPanelProps = {
   onToggleStar: () => void;
   onUpdateBoard: (boardId: string, payload: { title?: string; background?: string }) => Promise<void>;
   onInviteMember: (boardId: string, payload: { email: string; name?: string }) => Promise<void>;
+  onExportMarkdown?: () => void;
+  onExportJson?: () => void;
 };
 
 const POWER_UPS = [
@@ -31,8 +34,8 @@ const POWER_UPS = [
     description: "Upload files, manage cover images, and download attachments from cards.",
   },
   {
-    title: "Filters",
-    description: "Search by title and narrow cards by due date, label, or assignee.",
+    title: "Filters & Priorities",
+    description: "Search by title and narrow cards by due date, priority, label, or assignee.",
   },
 ];
 
@@ -48,6 +51,8 @@ export function BoardToolsPanel({
   onToggleStar,
   onUpdateBoard,
   onInviteMember,
+  onExportMarkdown,
+  onExportJson,
 }: BoardToolsPanelProps) {
   const [title, setTitle] = useState("");
   const [background, setBackground] = useState(backgrounds[0] ?? "ocean");
@@ -55,6 +60,18 @@ export function BoardToolsPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+
+  async function handleGenerateInvite() {
+    if (!board?.id) return;
+    try {
+      const res = await api.generateInviteCode(board.id);
+      setInviteLink(`${window.location.origin}/#invite=${res.inviteCode}`);
+      setInviteMessage(null);
+    } catch (err: any) {
+      setInviteMessage(err.message || "Failed to generate invite link. Ensure you are a board admin.");
+    }
+  }
 
   useEffect(() => {
     if (!board) {
@@ -78,31 +95,25 @@ export function BoardToolsPanel({
   const activeBoard = board;
 
   async function invite(event: FormEvent) {
-    event.preventDefault(); setInviteMessage(null);
-    try { await onInviteMember(activeBoard.id, { email: inviteEmail }); setInviteEmail(""); setInviteMessage("Teammate added to this workspace."); }
-    catch (error) { setInviteMessage(error instanceof Error ? error.message : "Could not invite teammate."); }
+    event.preventDefault();
+    if (!inviteEmail.trim()) return;
+    try {
+      await onInviteMember(activeBoard.id, { email: inviteEmail.trim() });
+      setInviteMessage(`Invitation recorded for ${inviteEmail.trim()}`);
+      setInviteEmail("");
+    } catch {
+      setInviteMessage("Failed to invite member.");
+    }
   }
 
-  async function handleSave(event: FormEvent<HTMLFormElement>) {
+  async function handleSave(event: FormEvent) {
     event.preventDefault();
-
-    const trimmedTitle = title.trim();
-    const nextTitle = trimmedTitle && trimmedTitle !== activeBoard.title ? trimmedTitle : undefined;
-    const nextBackground = background !== activeBoard.background ? background : undefined;
-
-    if (!nextTitle && !nextBackground) {
-      onClose();
-      return;
-    }
+    const nextTitle = title.trim();
+    if (!nextTitle) return;
 
     setIsSaving(true);
-
     try {
-      await onUpdateBoard(activeBoard.id, {
-        title: nextTitle,
-        background: nextBackground,
-      });
-      onClose();
+      await onUpdateBoard(activeBoard.id, { title: nextTitle, background });
     } finally {
       setIsSaving(false);
     }
@@ -129,7 +140,7 @@ export function BoardToolsPanel({
             Members
           </button>
           <button className={`board-picker-tab ${view === "powerups" ? "is-active" : ""}`} onClick={() => setView("powerups")} type="button">
-            Power-Ups
+            Power-Ups & Exports
           </button>
         </div>
 
@@ -181,6 +192,16 @@ export function BoardToolsPanel({
               <button className="ghost-button" onClick={onShareBoard} type="button">
                 Share board link
               </button>
+              {onExportMarkdown && (
+                <button className="ghost-button" onClick={onExportMarkdown} type="button">
+                  Export Markdown
+                </button>
+              )}
+              {onExportJson && (
+                <button className="ghost-button" onClick={onExportJson} type="button">
+                  Export JSON
+                </button>
+              )}
               <button className="ghost-button" onClick={onToggleStar} type="button">
                 {isStarred ? "Remove star" : "Star board"}
               </button>
@@ -198,6 +219,14 @@ export function BoardToolsPanel({
               <p>Invite a teammate by email. They can create an account with that email to join.</p>
               <div className="invite-form__row"><input required type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="teammate@company.com" /><button className="primary-button" type="submit">Invite</button></div>
               {inviteMessage ? <p className="invite-form__message">{inviteMessage}</p> : null}
+              <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border-color)" }}>
+                <p style={{ marginBottom: "0.5rem" }}>Or share an invite link (Admins only):</p>
+                {inviteLink ? (
+                  <input readOnly value={inviteLink} onFocus={(e) => e.target.select()} style={{ width: "100%", padding: "0.5rem", borderRadius: "0.25rem", border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-primary)" }} />
+                ) : (
+                  <button type="button" className="ghost-button" onClick={handleGenerateInvite}>Generate Invite Link</button>
+                )}
+              </div>
             </form>
             <div className="workspace-card">
               <div className="workspace-card__header">
@@ -232,6 +261,25 @@ export function BoardToolsPanel({
                 <p>{powerUp.description}</p>
               </article>
             ))}
+            <article className="workspace-card">
+              <div className="workspace-card__header">
+                <h3>Export & Backup</h3>
+                <span>Tools</span>
+              </div>
+              <p>Download your complete project board in standard formats for reports or backups.</p>
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+                {onExportMarkdown && (
+                  <button className="ghost-button" onClick={onExportMarkdown} type="button">
+                    Download .md Report
+                  </button>
+                )}
+                {onExportJson && (
+                  <button className="ghost-button" onClick={onExportJson} type="button">
+                    Download .json Backup
+                  </button>
+                )}
+              </div>
+            </article>
           </div>
         ) : null}
       </aside>

@@ -1,5 +1,5 @@
 import type { Card } from "../types";
-import { formatDueDate, getChecklistStats, isOverdue } from "../lib/utils";
+import { cleanCardTitle, formatDueDate, getCardPriority, getChecklistStats, isOverdue } from "../lib/utils";
 
 type CardTileProps = {
   card: Card;
@@ -11,6 +11,8 @@ type CardTileProps = {
 export function CardTile({ card, onOpen, isDragging, onToggleComplete }: CardTileProps) {
   const checklistStats = getChecklistStats(card);
   const overdue = isOverdue(card.dueDate);
+  const priority = getCardPriority(card);
+  const displayTitle = cleanCardTitle(card.title);
 
   function handleOpen() {
     onOpen(card.id);
@@ -40,6 +42,11 @@ export function CardTile({ card, onOpen, isDragging, onToggleComplete }: CardTil
 
       <div className="card-tile__top">
         <div className="card-tile__labels">
+          {priority && (
+            <span className={`priority-badge priority-badge--${priority}`} title={`Priority: ${priority}`}>
+              {priority === "urgent" ? "🔥 Urgent" : priority === "high" ? "▲ High" : priority === "medium" ? "◼ Med" : "▼ Low"}
+            </span>
+          )}
           {card.labels.map((label) => (
             <span key={label.id} className="card-label" style={{ backgroundColor: label.color }} title={`Color: ${label.color}, title: ${label.name || "none"}`}>
               {label.name}
@@ -62,7 +69,7 @@ export function CardTile({ card, onOpen, isDragging, onToggleComplete }: CardTil
             </svg>
           </button>
         )}
-        <strong className={`card-tile__title ${card.isComplete ? "is-completed" : ""}`}>{card.title}</strong>
+        <strong className={`card-tile__title ${card.isComplete ? "is-completed" : ""}`}>{displayTitle}</strong>
       </div>
 
       <div className="card-tile__footer">
@@ -74,8 +81,8 @@ export function CardTile({ card, onOpen, isDragging, onToggleComplete }: CardTil
             </div>
           ) : null}
 
-          {checklistStats.total > 0 ? (
-            <div className={`checklist-badge ${checklistStats.completed === checklistStats.total ? "is-complete" : ""}`}>
+          {card.checklists.length > 0 ? (
+            <div className={`checklist-badge ${checklistStats.total > 0 && checklistStats.completed === checklistStats.total ? "is-complete" : ""}`}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
               <span>{checklistStats.completed}/{checklistStats.total}</span>
             </div>

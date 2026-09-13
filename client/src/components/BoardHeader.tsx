@@ -19,6 +19,14 @@ type BoardHeaderProps = {
   onToggleLabel: (labelId: string) => void;
   onToggleMember: (memberId: string) => void;
   onToggleStar: () => void;
+  onOpenCommandPalette?: () => void;
+  onToggleTheme?: () => void;
+  currentTheme?: string;
+  onExportMarkdown?: () => void;
+  currentView?: "board" | "calendar" | "table" | "analytics";
+  onViewChange?: (view: "board" | "calendar" | "table" | "analytics") => void;
+  onExportCSV?: () => void;
+  onExportJSON?: () => void;
 };
 
 export function BoardHeader({
@@ -40,6 +48,14 @@ export function BoardHeader({
   onToggleLabel,
   onToggleMember,
   onToggleStar,
+  onOpenCommandPalette,
+  onToggleTheme,
+  currentTheme,
+  onExportMarkdown,
+  currentView = "board",
+  onViewChange,
+  onExportCSV,
+  onExportJSON,
 }: BoardHeaderProps) {
   const activeFilterCount =
     filters.labelIds.length +
@@ -81,6 +97,60 @@ export function BoardHeader({
               />
             </svg>
           </button>
+
+          {onViewChange && (
+            <div className="board-view-tabs">
+              <button
+                type="button"
+                className={`board-view-tab ${currentView === "board" ? "is-active" : ""}`}
+                onClick={() => onViewChange("board")}
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <rect x="3" y="3" width="7" height="18" rx="1" />
+                  <rect x="14" y="3" width="7" height="10" rx="1" />
+                </svg>
+                <span>Board</span>
+              </button>
+              <button
+                type="button"
+                className={`board-view-tab ${currentView === "calendar" ? "is-active" : ""}`}
+                onClick={() => onViewChange("calendar")}
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                <span>Calendar</span>
+              </button>
+              <button
+                type="button"
+                className={`board-view-tab ${currentView === "table" ? "is-active" : ""}`}
+                onClick={() => onViewChange("table")}
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <line x1="3" y1="9" x2="21" y2="9" />
+                  <line x1="3" y1="15" x2="21" y2="15" />
+                  <line x1="9" y1="3" x2="9" y2="21" />
+                </svg>
+                <span>Table</span>
+              </button>
+              <button
+                type="button"
+                className={`board-view-tab ${currentView === "analytics" ? "is-active" : ""}`}
+                onClick={() => onViewChange("analytics")}
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <line x1="18" y1="20" x2="18" y2="10" />
+                  <line x1="12" y1="20" x2="12" y2="4" />
+                  <line x1="6" y1="20" x2="6" y2="14" />
+                </svg>
+                <span>Analytics</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="board-header__right">
@@ -128,6 +198,97 @@ export function BoardHeader({
               />
             </svg>
           </button>
+          {onOpenCommandPalette && (
+            <button
+              className="board-action-icon board-action-icon--highlight"
+              onClick={onOpenCommandPalette}
+              type="button"
+              title="Command Palette (Ctrl + K)"
+              aria-label="Command Palette"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </button>
+          )}
+
+          {onToggleTheme && (
+            <button
+              className="board-action-icon"
+              onClick={onToggleTheme}
+              type="button"
+              title={`Switch to ${currentTheme === "dark" ? "Light" : "Dark"} mode`}
+              aria-label="Toggle theme"
+            >
+              {currentTheme === "dark" ? (
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="5"></circle>
+                  <line x1="12" y1="1" x2="12" y2="3"></line>
+                  <line x1="12" y1="21" x2="12" y2="23"></line>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                  <line x1="1" y1="12" x2="3" y2="12"></line>
+                  <line x1="21" y1="12" x2="23" y2="12"></line>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+              )}
+            </button>
+          )}
+
+          {onExportCSV && (
+            <button
+              className="board-action-icon"
+              onClick={onExportCSV}
+              type="button"
+              title="Export cards to CSV spreadsheet"
+              aria-label="Export CSV"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="8" y1="13" x2="16" y2="13" />
+                <line x1="8" y1="17" x2="16" y2="17" />
+              </svg>
+            </button>
+          )}
+
+          {onExportJSON && (
+            <button
+              className="board-action-icon"
+              onClick={onExportJSON}
+              type="button"
+              title="Backup board as JSON"
+              aria-label="Backup JSON"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+            </button>
+          )}
+
+          {onExportMarkdown && (
+            <button
+              className="board-action-icon"
+              onClick={onExportMarkdown}
+              type="button"
+              title="Export board as Markdown"
+              aria-label="Export board"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+          )}
+
           <button className="board-action-chip board-action-chip--primary" onClick={onShareBoard} type="button">
             Share
           </button>

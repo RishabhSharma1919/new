@@ -89,6 +89,7 @@ export type BoardList = {
 
 export type Board = {
   id: string;
+  organizationId?: string | null;
   title: string;
   background: string;
   createdAt: string;

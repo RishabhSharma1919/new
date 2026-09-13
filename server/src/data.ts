@@ -92,9 +92,51 @@ export const DEFAULT_LABELS = [
   { name: "Priority", color: "#dc2626" },
 ];
 
-export async function getBoardSummaries(userId?: string) {
+export async function getOrganizationSummaries(userId: string) {
+  const organizations = await prisma.organization.findMany({
+    where: { members: { some: { userId } } },
+    orderBy: { createdAt: "asc" },
+  });
+  return organizations;
+}
+
+export async function ensurePersonalOrganization(userId: string, userName: string) {
+  const existing = await prisma.organizationMember.findFirst({
+    where: { userId, role: "admin" },
+    include: { organization: true },
+  });
+  if (existing) return existing.organization;
+
+  const name = `${userName}'s Workspace`;
+  const organization = await prisma.organization.create({
+    data: {
+      name,
+      slug: slugify(name),
+      color: "#0c66e4",
+      members: {
+        create: { userId, role: "admin" },
+      },
+    },
+  });
+  return organization;
+}
+
+export function slugify(text: string) {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]+/g, "")
+    .replace(/--+/g, "-");
+}
+
+export async function getBoardSummaries(userId?: string, organizationId?: string) {
   const boards = await prisma.board.findMany({
-    where: userId ? { members: { some: { userId } } } : undefined,
+    where: {
+      ...(userId ? { members: { some: { userId } } } : {}),
+      ...(organizationId ? { organizationId } : {}),
+    },
     orderBy: {
       createdAt: "asc",
     },
@@ -234,6 +276,7 @@ export async function recordActivity(cardId: string, action: string, message: st
 function serializeBoard(board: BoardDetails) {
   return {
     id: board.id,
+    organizationId: board.organizationId,
     title: board.title,
     background: board.background,
     createdAt: board.createdAt,

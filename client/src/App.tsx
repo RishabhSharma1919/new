@@ -15,6 +15,8 @@ import { ListColumn } from "./components/ListColumn";
 import { PlannerView } from "./components/PlannerView";
 import { WorkspaceGuidePanel } from "./components/WorkspaceGuidePanel";
 import { AuthScreen } from "./components/AuthScreen";
+import { InviteLanding } from "./components/InviteLanding";
+import { useTheme } from "./lib/useTheme";
 
 const EMPTY_FILTERS: FilterState = {
   search: "",
@@ -30,6 +32,7 @@ type ActiveView = "board" | "inbox" | "planner";
 type GuideMode = "guide" | "updates";
 
 export default function App() {
+  const { theme, toggleTheme } = useTheme();
   const { mutate: globalMutate } = useSWRConfig();
   const [user, setUser] = useState<SessionUser | null>(() => {
     try { return JSON.parse(window.localStorage.getItem("working-place-user") ?? "null"); } catch { return null; }
@@ -59,6 +62,7 @@ export default function App() {
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(() => getHashState().boardId ?? null);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [activeCardId, setActiveCardId] = useState<string | null>(() => getHashState().cardId ?? null);
+  const [inviteCode, setInviteCode] = useState<string | null>(() => getHashState().inviteCode ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [newListTitle, setNewListTitle] = useState("");
   const [isAddingList, setIsAddingList] = useState(false);
@@ -141,6 +145,10 @@ export default function App() {
       if (typeof hashState.cardId !== "undefined") {
         setActiveCardId(hashState.cardId);
       }
+
+      if (typeof hashState.inviteCode !== "undefined") {
+        setInviteCode(hashState.inviteCode);
+      }
     };
 
     window.addEventListener("hashchange", syncFromHash);
@@ -155,8 +163,9 @@ export default function App() {
       boardId: selectedBoardId,
       cardId: activeCardId,
       view: isHomeOpen ? "home" : activeViews.join(","),
+      inviteCode,
     });
-  }, [activeCardId, selectedBoardId, isHomeOpen, activeViews]);
+  }, [activeCardId, selectedBoardId, isHomeOpen, activeViews, inviteCode]);
 
   useEffect(() => {
     if (!toastMessage || typeof window === "undefined") {
@@ -344,10 +353,6 @@ export default function App() {
   }
 
   async function handleDeleteList(listId: string) {
-    if (!window.confirm("Delete this list and all of its cards?")) {
-      return;
-    }
-
     await syncBoardMutation(api.deleteList(listId));
   }
 
@@ -451,6 +456,24 @@ export default function App() {
 
   if (!user) return <AuthScreen onSubmit={handleAuth} />;
 
+  if (inviteCode) {
+    return (
+      <InviteLanding
+        inviteCode={inviteCode}
+        onJoinSuccess={(boardId) => {
+          setInviteCode(null);
+          setIsHomeOpen(false);
+          setSelectedBoardId(boardId);
+          void loadBoard(boardId);
+        }}
+        onCancel={() => {
+          setInviteCode(null);
+          setIsHomeOpen(true);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="app-shell" data-background={currentBoard?.background ?? "ocean"}>
       <header className="global-nav">
@@ -498,7 +521,7 @@ export default function App() {
         </div>
 
         <div className="global-nav__right">
-          <button className="trial-pill" onClick={() => openGuide("guide")} type="button">
+          {/* <button className="trial-pill" onClick={() => openGuide("guide")} type="button">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path
                 d="m12 4 1.8 4.5L18 10l-4.2 2 1.6 4.5L12 14l-3.4 2.5L10.2 12 6 10l4.2-1.5L12 4Z"
@@ -509,8 +532,8 @@ export default function App() {
                 strokeWidth="1.7"
               />
             </svg>
-            14 days left
-          </button>
+            
+          </button> */}
           <button className="nav-icon-button" onClick={() => openGuide("updates")} type="button" aria-label="Announcements">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path
@@ -535,6 +558,27 @@ export default function App() {
               />
             </svg>
           </button>
+
+          <button className="nav-icon-button" onClick={toggleTheme} type="button" aria-label="Toggle theme">
+            {theme === "dark" ? (
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+            ) : (
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            )}
+          </button>
+
           <button className="nav-icon-button" onClick={() => openGuide("guide")} type="button" aria-label="Help">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path
@@ -960,6 +1004,7 @@ function getHashState(): {
   cardId?: string | null;
   view?: WorkspaceView;
   rawView?: string;
+  inviteCode?: string | null;
 } {
   if (typeof window === "undefined") {
     return {};
@@ -970,10 +1015,12 @@ function getHashState(): {
   const view = params.get("view");
   const boardId = params.get("board");
   const cardId = params.get("card");
+  const inviteCode = params.get("invite");
 
   return {
     boardId,
     cardId,
+    inviteCode,
     view: isWorkspaceView(view) ? view : undefined,
     rawView: view ?? undefined,
   };
@@ -987,24 +1034,31 @@ function writeHashState({
   boardId,
   cardId,
   view,
+  inviteCode,
 }: {
   boardId: string | null;
   cardId: string | null;
   view: string;
+  inviteCode?: string | null;
 }) {
   if (typeof window === "undefined") {
     return;
   }
 
   const params = new URLSearchParams();
-  params.set("view", view);
 
-  if (boardId) {
-    params.set("board", boardId);
-  }
+  if (inviteCode) {
+    params.set("invite", inviteCode);
+  } else {
+    params.set("view", view);
 
-  if (cardId) {
-    params.set("card", cardId);
+    if (boardId) {
+      params.set("board", boardId);
+    }
+
+    if (cardId) {
+      params.set("card", cardId);
+    }
   }
 
   const nextHash = params.toString();
