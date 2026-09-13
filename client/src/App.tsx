@@ -491,12 +491,8 @@ export default function App() {
           </button>
 
           <button className="global-nav__brand" onClick={() => setIsBoardPickerOpen(true)} type="button">
-            <span className="global-nav__brand-mark">
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <rect x="4.5" y="5.5" width="15" height="13" rx="3" fill="currentColor" opacity="0.16" />
-                <rect x="6.5" y="7.5" width="4.2" height="9" rx="1.2" fill="currentColor" />
-                <rect x="13.2" y="7.5" width="4.2" height="6" rx="1.2" fill="currentColor" />
-              </svg>
+            <span className="global-nav__brand-mark" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <img src="/logo.jpg" alt="Team Work Logo" style={{ width: "24px", height: "24px", objectFit: "cover", borderRadius: "50%" }} />
             </span>
             <span className="global-nav__brand-text">Working Place</span>
           </button>
