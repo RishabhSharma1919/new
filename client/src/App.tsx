@@ -100,6 +100,15 @@ export default function App() {
     return () => { socket.disconnect(); };
   }, [user, selectedBoardId, globalMutate, mutateBoard]);
 
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+      setSelectedBoardId(null);
+    };
+    window.addEventListener("unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("unauthorized", handleUnauthorized);
+  }, []);
+
   async function handleAuth(payload: { name?: string; email: string; password: string }, mode: "login" | "register") {
     const response = mode === "login" ? await api.login({ email: payload.email, password: payload.password }) : await api.register({ name: payload.name ?? "", email: payload.email, password: payload.password });
     window.localStorage.setItem("working-place-token", response.token); window.localStorage.setItem("working-place-user", JSON.stringify(response.user));

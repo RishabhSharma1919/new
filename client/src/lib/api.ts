@@ -32,6 +32,7 @@ export async function fetcher<T>(path: string): Promise<T> {
       window.localStorage.removeItem("working-place-user");
       window.localStorage.removeItem("working-place-token");
       authToken = null;
+      window.dispatchEvent(new Event("unauthorized"));
     }
     throw new Error(payload?.error ?? "Request failed.");
   }
@@ -55,6 +56,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       window.localStorage.removeItem("working-place-user");
       window.localStorage.removeItem("working-place-token");
       authToken = null;
+      window.dispatchEvent(new Event("unauthorized"));
     }
     throw new Error(payload?.error ?? "Request failed.");
   }
